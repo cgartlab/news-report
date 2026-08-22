@@ -1,0 +1,10 @@
+{
+  "telegram_limit_per_channel": 20,
+  "rss_limit_per_source": 10,
+  "search_limit_per_keyword": 5,
+  "dedup_threshold": 0.75,
+  "target_count_min": 20,
+  "target_count_max": 20,
+  "output_topic": null,
+  "output_format": "telegram_markdown"
+}
