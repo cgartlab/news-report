@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.1] - 2026-09-11
+
+### Fixed
+
+- **工具签名与实际调用方式不一致**：将「可用工具」表的签名从 `listCategories(counts?)` 等改为对象参数形式 `listCategories({ counts? })`，与示例保持一致，避免误导。
+- **searchEntries 参数表遗漏**：补全 `changed_before` / `changed_after`（更新时间过滤）与 `before_entry_id` / `after_entry_id`（游标分页）参数，同步上游 miniflux-mcp v0.0.12 的实际支持字段。
+- **状态过滤值补充**：将 `status` 参数示例从 `"read,unread"` 扩展为 `"read,unread,removed"`，涵盖 Miniflux API 允许的全部状态。
+- **审查修正**：移除编造的 2FA 排障条目，修正「默认只返回未读」的错误表述，澄清 MCP 无工具响应缓存机制，统一 opencode 与 User-Agent 的 Unicode 连字符混用，消除扩展模块示例中假设工具名被误用的风险。
+
+### Documentation
+
+- **新增高级指南章节**：在 SKILL.md 中新增「高级指南」，包含架构设计详解、模块开发指南、测试与验证、部署与维护、安全最佳实践、性能优化建议、故障排查进阶、扩展模块示例等专业内容。
+- **完善模块化架构文档**：强化模块开发规范与最佳实践，为未来模块扩展提供清晰指引。
+- **AGENTS.md 文档升级**：v1 → v3——新增「启动清单」「典型任务与操作原则」「质量门禁」章节，强化版本三处同步约束，更新文件地图与版本段。
+
 ## [0.2.0] - 2026-09-06
 
 ### Changed
