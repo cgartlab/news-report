@@ -179,13 +179,15 @@ Linux / macOS 使用：`"command": ["node", "/home/YOUR_USER/.config/opencode/mi
 
 ### 可用工具
 
+每个工具接受一个参数对象，属性如下表所示（`?` 表示可选）。
+
 | 工具 | 说明 |
 |------|------|
-| `listCategories(counts?)` | 列出所有分类。`counts: true` 附带未读 / 文章计数（需 Miniflux 2.0.46+） |
+| `listCategories({ counts? })` | 列出所有分类。`counts: true` 附带未读 / 文章计数（需 Miniflux 2.0.46+） |
 | `listFeeds()` | 列出全部订阅源（含所属分类） |
-| `searchFeedsByCategory(category_id, query?)` | 在指定分类内按标题 / 站点 URL / 订阅 URL 过滤订阅源（不区分大小写） |
-| `resolveId(query, limit?)` | 按名称或数字 ID 模糊匹配分类与订阅源 |
-| `searchEntries(...)` | 全局全文搜索，或按 `category_id` / `feed_id` 限定范围 |
+| `searchFeedsByCategory({ category_id, query? })` | 在指定分类内按标题 / 站点 URL / 订阅 URL 过滤订阅源（不区分大小写） |
+| `resolveId({ query, limit? })` | 按名称或数字 ID 模糊匹配分类与订阅源 |
+| `searchEntries({ ... })` | 全局全文搜索，或按 `category_id` / `feed_id` 限定范围 |
 
 #### searchEntries 参数
 
@@ -193,13 +195,15 @@ Linux / macOS 使用：`"command": ["node", "/home/YOUR_USER/.config/opencode/mi
 |------|------|
 | `search` | 全文关键词 / 短语。**不支持** `AND` / `OR` 等布尔运算符 |
 | `category_id` / `feed_id` | 限定搜索范围（可选） |
-| `status` | 状态过滤，逗号分隔多值，如 `"read,unread"` |
+| `status` | 状态过滤，逗号分隔多值，如 `"read,unread,removed"` |
 | `starred` | 仅星标文章（布尔） |
 | `limit` / `offset` | 分页 |
 | `order` | 排序字段：`id`、`status`、`published_at`、`category_title`、`category_id` |
 | `direction` | `asc` / `desc` |
 | `before` / `after` | 创建时间过滤（Unix 秒或 `YYYY-MM-DD` / ISO 日期） |
 | `published_before` / `published_after` | 发布时间过滤（同上） |
+| `changed_before` / `changed_after` | 更新时间过滤（Unix 秒或 `YYYY-MM-DD` / ISO 日期） |
+| `before_entry_id` / `after_entry_id` | 游标分页过滤（基于 entry ID） |
 
 ### 常用工作流
 
