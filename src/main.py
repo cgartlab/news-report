@@ -15,24 +15,24 @@ Workflow:
 import argparse
 import json
 import sys
-import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 SKILL_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SKILL_DIR / "src"))
 
 # Load .env file before importing submodules (they read os.environ at import time)
-from env_loader import load_env
+from env_loader import load_env  # noqa: E402
+
 load_env()
 
 # Import submodules
-from collect_telegram import collect_telegram
-from collect_rss import collect_rss
-from collect_search import collect_search
-from evaluator import evaluate_items, Item
-from deduplicator import deduplicate
-from report import generate_report, save_report, load_curated_items
+from collect_rss import collect_rss  # noqa: E402
+from collect_search import collect_search  # noqa: E402
+from collect_telegram import collect_telegram  # noqa: E402
+from deduplicator import deduplicate  # noqa: E402
+from evaluator import evaluate_items  # noqa: E402
+from report import generate_report, load_curated_items, save_report  # noqa: E402
 
 
 def log(msg: str):
@@ -70,7 +70,9 @@ def step_collect():
 
     total = 0
 
-    tg_items = collect_telegram(tg_channels, limit_per_channel=config.get("telegram_limit_per_channel", 20))
+    tg_items = collect_telegram(
+        tg_channels, limit_per_channel=config.get("telegram_limit_per_channel", 20)
+    )
     log(f"TG collected: {len(tg_items)}")
     total += len(tg_items)
 
@@ -78,7 +80,9 @@ def step_collect():
     log(f"RSS collected: {len(rss_items)}")
     total += len(rss_items)
 
-    search_items = collect_search(keywords, limit_per_keyword=config.get("search_limit_per_keyword", 5))
+    search_items = collect_search(
+        keywords, limit_per_keyword=config.get("search_limit_per_keyword", 5)
+    )
     log(f"Search collected: {len(search_items)}")
     total += len(search_items)
 
@@ -107,7 +111,10 @@ def step_deduplicate():
     items_file = SKILL_DIR / "data" / "items.jsonl"
     with open(items_file, "w", encoding="utf-8") as f:
         for item in unique:
-            f.write(json.dumps(item.__dict__ if hasattr(item, '__dict__') else item, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(item.__dict__ if hasattr(item, "__dict__") else item, ensure_ascii=False)
+                + "\n"
+            )
     return len(unique)
 
 
@@ -136,7 +143,7 @@ def run_full():
         log("Nothing survived evaluation")
         return
 
-    unique_count = run_step("deduplicate", step_deduplicate)
+    run_step("deduplicate", step_deduplicate)
 
     report = run_step("report", step_report)
     return report
@@ -147,8 +154,11 @@ def main():
     parser.add_argument("--collect-only", action="store_true", help="Run collection only")
     parser.add_argument("--evaluate-only", action="store_true", help="Run evaluation only")
     parser.add_argument("--full", action="store_true", help="Run full pipeline")
-    parser.add_argument("--skip-llm", action="store_true",
-                        help="Skip LLM filtering in evaluation (rule-only, fastest)")
+    parser.add_argument(
+        "--skip-llm",
+        action="store_true",
+        help="Skip LLM filtering in evaluation (rule-only, fastest)",
+    )
     args = parser.parse_args()
 
     if args.collect_only:

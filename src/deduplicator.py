@@ -6,12 +6,11 @@ Threshold: items with >75% semantic overlap are merged (the more complete one wi
 """
 
 import json
-import sys
 import os
-import urllib.request
 import urllib.error
-from pathlib import Path
+import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 
 SKILL_DIR = Path(__file__).parent.parent
 
@@ -113,7 +112,53 @@ def is_duplicate(a: Item, b: Item, threshold: float = 0.75) -> bool:
     words_b = set((b.title + " " + b.summary[:200]).lower().split())
 
     # Remove very common stopwords to reduce noise
-    stopwords = {"the", "a", "an", "of", "in", "to", "for", "and", "or", "on", "is", "it", "with", "as", "by", "at", "be", "this", "that", "are", "was", "were", "has", "have", "had", "not", "but", "from", "or", "and", "新", "的", "是", "在", "了", "和", "与", "为", "对", "将", "把", "被", "要", "有", "可", "以", "也"}
+    stopwords = {
+        "the",
+        "a",
+        "an",
+        "of",
+        "in",
+        "to",
+        "for",
+        "and",
+        "or",
+        "on",
+        "is",
+        "it",
+        "with",
+        "as",
+        "by",
+        "at",
+        "be",
+        "this",
+        "that",
+        "are",
+        "was",
+        "were",
+        "has",
+        "have",
+        "had",
+        "not",
+        "but",
+        "from",
+        "新",
+        "的",
+        "是",
+        "在",
+        "了",
+        "和",
+        "与",
+        "为",
+        "对",
+        "将",
+        "把",
+        "被",
+        "要",
+        "有",
+        "可",
+        "以",
+        "也",
+    }
     words_a -= stopwords
     words_b -= stopwords
 
@@ -125,7 +170,7 @@ def is_duplicate(a: Item, b: Item, threshold: float = 0.75) -> bool:
     jaccard = len(intersection) / len(union)
 
     # Also check URL overlap
-    url_match = (a.url and b.url and a.url == b.url)
+    url_match = a.url and b.url and a.url == b.url
 
     return jaccard > threshold or url_match
 
@@ -162,6 +207,7 @@ def deduplicate(items: list[Item]) -> list[Item]:
 
 if __name__ == "__main__":
     from env_loader import load_env
+
     load_env()
     items = load_items()
     unique = deduplicate(items)

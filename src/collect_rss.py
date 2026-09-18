@@ -8,8 +8,8 @@ import json
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 SKILL_DIR = Path(__file__).parent.parent
 
@@ -21,9 +21,7 @@ def parse_feed(url: str, source_name: str, tags: list[str], limit: int = 10) -> 
     """
     items = []
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; news-report skill/1.0)"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; news-report skill/1.0)"}
 
     try:
         req = urllib.request.Request(url, headers=headers)
@@ -72,7 +70,7 @@ def parse_feed(url: str, source_name: str, tags: list[str], limit: int = 10) -> 
             return items
 
         # Atom
-        entries = root.findall(f"entry")
+        entries = root.findall("entry")
         if entries:
             for entry in entries[:limit]:
                 title = _get_text(entry, "title")
@@ -119,6 +117,7 @@ def _get_text(parent, tag_name: str) -> str:
 
 def _strip_html(text: str) -> str:
     import re
+
     text = re.sub(r"<[^>]+>", "", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
@@ -135,7 +134,7 @@ def _normalize_date(date_str: str) -> str:
       - Relative:                  2 days ago / 3 weeks ago
     """
     import re
-    from datetime import datetime, timedelta
+    from datetime import timedelta
 
     if not date_str:
         return ""
@@ -182,14 +181,6 @@ def _normalize_date(date_str: str) -> str:
 
     # ── 4. RFC 822 / RFC 1123 (with year) ───────────────────────────────
     #   e.g. "Wed, 06 May 2026 14:30:00 +0000" or "06 May 2026"
-    full_patterns = [
-        # RFC 822 with weekday and zone: "Wed, 06 May 2026 14:30:00 +0000"
-        (r"([A-Z][a-z]{2}),\s+(\d{1,2})\s+([A-Z][a-z]{2})\s+(\d{4})", "%d %b %Y"),
-        # RFC 1123: "Wed, 06 May 2026"
-        (r"([A-Z][a-z]{2}),\s+(\d{1,2})\s+([A-Z][a-z]{2})\s+(\d{4})", "%d %b %Y"),
-        # ISO-like with spaces: "2026-05-06 14:30:00"
-        (r"(\d{4})\s+(\d{2})\s+(\d{2})", "%Y %m %d"),
-    ]
 
     # Try full RFC 822 with year: "Wed, 06 May 2026" or "Wed, 06 Ma 2026"
     m = re.search(r"([A-Z][a-z]{1,2}),\s+(\d{1,2})\s+([A-Z][a-z]{1,2})\s+(\d{4})", date_str)
@@ -201,6 +192,7 @@ def _normalize_date(date_str: str) -> str:
         # Fallback to email.utils
         try:
             from email.utils import parsedate_to_datetime
+
             dt = parsedate_to_datetime(date_str)
             return dt.strftime("%Y-%m-%d")
         except Exception:
@@ -253,9 +245,18 @@ def _parse_month_and_build(year: int, day: int, month_abbr: str) -> str | None:
 
     # English month abbreviations
     EN_MONTH = {
-        "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4,
-        "May": 5, "Jun": 6, "Jul": 7, "Aug": 8,
-        "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+        "Jan": 1,
+        "Feb": 2,
+        "Mar": 3,
+        "Apr": 4,
+        "May": 5,
+        "Jun": 6,
+        "Jul": 7,
+        "Aug": 8,
+        "Sep": 9,
+        "Oct": 10,
+        "Nov": 11,
+        "Dec": 12,
     }
 
     # French / Romance-language abbreviated months (used by少数派 RSS)
@@ -266,12 +267,29 @@ def _parse_month_and_build(year: int, day: int, month_abbr: str) -> str | None:
     #   April 2026: Wed=1, Thu=2, Fri=3, Sat=4, Sun=5, Mon=6, Tue=7...
     #   "Wed, 01 Ap" -> Apr 1  ✓
     FR_MONTH = {
-        "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
-        "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+        "Jan": 1,
+        "Feb": 2,
+        "Mar": 3,
+        "Apr": 4,
+        "May": 5,
+        "Jun": 6,
+        "Jul": 7,
+        "Aug": 8,
+        "Sep": 9,
+        "Oct": 10,
+        "Nov": 11,
+        "Dec": 12,
         # French month names (full)
-        "Fév": 2, "Fev": 2, "Avr": 4, "Mai": 5, "Juin": 6, "Jui": 6,
-        "Juil": 7, "Août": 8, "Aou": 8, "Sep": 9, "Oct": 10, "Nov": 11,
-        "Déc": 12, "Dec": 12,
+        "Fév": 2,
+        "Fev": 2,
+        "Avr": 4,
+        "Mai": 5,
+        "Juin": 6,
+        "Jui": 6,
+        "Juil": 7,
+        "Août": 8,
+        "Aou": 8,
+        "Déc": 12,
         # French abbreviated (2-letter, from 少数派 RSS)
         # Verified by weekday cross-reference:
         #   "Fri, 01 Ma" -> May 1 2026 is Friday ✓
@@ -279,14 +297,14 @@ def _parse_month_and_build(year: int, day: int, month_abbr: str) -> str | None:
         #   "Tue, 10 Fe" -> Feb 10 2026 is Tuesday ✓
         #   "Tue, 15 Ju" -> Jul 15 2025 is Tuesday ✓  (Ju=July not June)
         #   "Sat, 22 Ap" -> Apr 22 2026 is Wednesday ✓
-        "Ma": 5,   # mai = May
-        "Ap": 4,   # avr = April
-        "Fe": 2,   # fev = February
-        "Se": 9,   # sep = September
-        "Ju": 7,   # juil = July  (Ju=6 would give Sun; Ju=7 gives Tue which matches)
+        "Ma": 5,  # mai = May
+        "Ap": 4,  # avr = April
+        "Fe": 2,  # fev = February
+        "Se": 9,  # sep = September
+        "Ju": 7,  # juil = July  (Ju=6 would give Sun; Ju=7 gives Tue which matches)
         "No": 11,  # nov = November
         "Oc": 10,  # oct = October
-        "Au": 8,   # aout = August
+        "Au": 8,  # aout = August
     }
 
     month_num = None
