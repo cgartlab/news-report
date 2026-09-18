@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.0] - 2026-09-18
+
+### Added
+
+- **模块 05 · `xiaohongshu-cli`（小红书 CLI）**：新增小红书信息源模块，通过 [jackwener/xiaohongshu-cli](https://github.com/jackwener/xiaohongshu-cli) 接入笔记搜索、热门榜、推荐 Feed、用户资料与话题。Apache 2.0 开源。
+  - `src/collect_xhs.py`：小红书 CLI 采集脚本，支持笔记搜索（`search`）、热门榜（`hot`，支持多分类：food/fashion/cosmetics/movie/career/love/home/gaming/travel/fitness）、推荐 Feed（`feed`），无鉴权时优雅跳过。
+  - CLI 路径自动检测：`XHS_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
+  - 集成到 `main.py` 的 `step_collect()`，作为第 7 个采集源。
+- **SKILL.md 模块 05 章节**：完整记录小红书 CLI 的前置条件、安装、鉴权、可用能力、使用方式与排障指南。
+- **信息源注册表更新**：模块 05 = `xiaohongshu-cli`（✅ 可用），原 rss-http/news-api 顺延为模块 06/07。
+- **config.json 新增字段**：`xhs_cli_path`、`xhs_include_hot`、`xhs_hot_categories`。
+- **.env.example 新增字段**：`XHS_CLI_PATH`。
+
+### Changed
+
+- **模块编号调整**：rss-http 从 05 → 06，news-api 从 06 → 07。
+- **SKILL.md 扩展模块示例**：rss-http 示例标记为模块 06。
+
+---
+
 ## [0.5.0] - 2026-09-18
 
 ### Added

@@ -32,6 +32,7 @@ from collect_rss import collect_rss  # noqa: E402
 from collect_search import collect_search  # noqa: E402
 from collect_telegram import collect_telegram  # noqa: E402
 from collect_twitter import collect_twitter  # noqa: E402
+from collect_xhs import collect_xhs  # noqa: E402
 from collect_zhihu import collect_zhihu  # noqa: E402
 from deduplicator import deduplicate  # noqa: E402
 from evaluator import evaluate_items  # noqa: E402
@@ -104,7 +105,23 @@ def step_collect():
     log(f"Bilibili collected: {len(bilibili_items)}")
     total += len(bilibili_items)
 
-    all_items = tg_items + rss_items + search_items + zhihu_items + twitter_items + bilibili_items
+    # Xiaohongshu CLI (module 05) — graceful skip when unauthenticated
+    xhs_items = collect_xhs(
+        include_hot=config.get("xhs_include_hot", True),
+        hot_categories=config.get("xhs_hot_categories", ["food", "fashion"]),
+    )
+    log(f"XHS collected: {len(xhs_items)}")
+    total += len(xhs_items)
+
+    all_items = (
+        tg_items
+        + rss_items
+        + search_items
+        + zhihu_items
+        + twitter_items
+        + bilibili_items
+        + xhs_items
+    )
     with open(items_file, "a", encoding="utf-8") as f:
         for item in all_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")

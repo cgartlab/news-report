@@ -51,10 +51,11 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 | 模块 02 · `zhihu-cli`（知乎开放平台 CLI） | CLI 二进制 | 知乎搜索、全网搜索、热榜、直答、问题推荐、回答摘要（详见下节） | `ZHIHU_CLI_PATH`、`ZHIHU_ACCESS_SECRET` | ✅ 可用（需鉴权） |
 | 模块 03 · `twitter-cli`（Twitter/X CLI） | CLI 二进制 | 推文搜索、时间线、书签、用户资料、话题标签（详见下节） | `TWITTER_CLI_PATH`、`TWITTER_AUTH_TOKEN`、`TWITTER_CT0` | ✅ 可用（需鉴权） |
 | 模块 04 · `bilibili-cli`（Bilibili CLI） | CLI 二进制 | 视频搜索、热门榜、排行榜、用户资料、动态（详见下节） | `BILIBILI_CLI_PATH` | ✅ 可用（部分需鉴权） |
-| 模块 05 · `rss-http`（直接抓取 RSS / Atom 源，示例占位） | HTTP | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
-| 模块 06 · `news-api`（NewsAPI / NewsData.io 等聚合 API，示例占位） | HTTP API | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
+| 模块 05 · `xiaohongshu-cli`（小红书 CLI） | CLI 二进制 | 笔记搜索、热门榜、推荐 Feed、用户资料、话题（详见下节） | `XHS_CLI_PATH` | ✅ 可用（需鉴权） |
+| 模块 06 · `rss-http`（直接抓取 RSS / Atom 源，示例占位） | HTTP | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
+| 模块 07 · `news-api`（NewsAPI / NewsData.io 等聚合 API，示例占位） | HTTP API | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
 
-> 模块 05 / 06 **仅为架构示例占位**：当前不存在对应的工具、命令或脚本，检索能力与配置项一律待下阶段设计；本版不得向用户声称可调用它们，也不得在回复中伪造其工具名。
+> 模块 06 / 07 **仅为架构示例占位**：当前不存在对应的工具、命令或脚本，检索能力与配置项一律待下阶段设计；本版不得向用户声称可调用它们，也不得在回复中伪造其工具名。
 
 ### 扩展方式
 
@@ -248,7 +249,7 @@ searchEntries({ starred: true, limit: 10 })
 
 ## 维护提示
 
-- 本仓库由 `miniflux-mcp-skill` 于 v0.2.0 更名重定位为 `news-report`（当前版本 v0.5.0）；后续新增 / 修改模块请遵守「信息源模块化架构」与「通用约定」，并同步 CHANGELOG。
+- 本仓库由 `miniflux-mcp-skill` 于 v0.2.0 更名重定位为 `news-report`（当前版本 v0.6.0）；后续新增 / 修改模块请遵守「信息源模块化架构」与「通用约定」，并同步 CHANGELOG。
 - **模块 01 专属**：方案 B 的 Basic Auth 补丁是本地改动，**不随 npm 包分发**；升级 `miniflux-mcp` 后必须重新打补丁。
 - **模块 01 专属**：上游 miniflux-mcp 为只读服务器，且只支持 API Token；如上游后续原生支持 Basic Auth，可放弃方案 B。
 - 若不确定搜索意图（`search` 是关键词还是某个订阅源名称），先向用户澄清，避免误判。
@@ -528,11 +529,80 @@ bili login
 | `需要登录` | 未认证 | 运行 `bili login` 扫码 |
 | `NetworkError` | 网络问题 | 检查网络连接 |
 
+### 模块 05：Xiaohongshu (小红书) CLI
+
+通过 [xiaohongshu-cli](https://github.com/jackwener/xiaohongshu-cli) 接入小红书平台，支持笔记搜索、热门榜、推荐 Feed、用户资料与话题。Apache 2.0 开源，Python 实现。
+
+> 完整文档见 [SKILL.md](https://raw.githubusercontent.com/jackwener/xiaohongshu-cli/master/SKILL.md)。
+
+#### 前置条件
+
+- xiaohongshu-cli（`uv tool install xiaohongshu-cli` 或 `pipx install xiaohongshu-cli`）
+- 浏览器登录 xiaohongshu.com（自动提取 Cookie）或二维码扫码登录
+
+#### 安装
+
+```bash
+# macOS / Linux
+uv tool install xiaohongshu-cli
+
+# 或使用 pipx
+pipx install xiaohongshu-cli
+```
+
+#### 认证
+
+```bash
+# 检查状态
+xhs status
+
+# 从浏览器提取 Cookie（推荐）
+xhs login
+
+# 二维码扫码登录
+xhs login --qrcode
+```
+
+Cookie 有效期 7 天，过期后自动尝试从浏览器刷新。
+
+#### 可用能力
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `search` | 搜索笔记 | `xhs search "美食" --max 20 --json` |
+| `hot` | 热门笔记（按分类） | `xhs hot -c fashion --max 20 --json` |
+| `feed` | 推荐 Feed | `xhs feed --max 20 --json` |
+| `topics` | 话题搜索 | `xhs topics "美食" --json` |
+| `search-user` | 用户搜索 | `xhs search-user "用户名" --json` |
+| `user` | 用户资料 | `xhs user <user_id> --json` |
+| `read` | 笔记详情 | `xhs read <note_id> --json` |
+
+**热门分类**：fashion, food, cosmetics, movie, career, love, home, gaming, travel, fitness
+
+#### 在 news-report 中的使用
+
+脚本路径通过 `src/collect_xhs.py` 集成，支持：
+- 笔记搜索（`search`）
+- 热门榜采集（`hot`，支持多分类）
+- 推荐 Feed（`feed`）
+
+无鉴权时优雅跳过，不影响其他采集模块。
+
+#### 排障
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| `NoCookieError` | 未登录 | 在浏览器登录 xiaohongshu.com，然后运行 `xhs login` |
+| `NeedVerifyError` | 触发验证码 | 在浏览器完成验证后重试 |
+| `IpBlockedError` | IP 被限制 | 切换网络（热点或 VPN） |
+| `SessionExpiredError` | Cookie 过期 | 运行 `xhs login` 刷新 |
+| 请求较慢 | 内置高斯抖动延迟 | 正常现象，避免触发风控 |
+
 ### 扩展模块示例（规划中模块参考）
 
 以下为规划中模块的**假设性**设计，用于展示模块章节应包含的内容结构：
 
-#### 模块 05 · `rss-http`（直接抓取 RSS/Atom 源）
+#### 模块 06 · `rss-http`（直接抓取 RSS/Atom 源）
 
 **前置条件**：
 - Node.js >= 18 或 Python >= 3.9（视实现语言而定）
@@ -549,7 +619,7 @@ bili login
 - 抓取并解析指定 URL 的 RSS/Atom 源，返回标准化条目列表（参数示意，均为假设命名：`url`、`limit?`）。
 - 通过 HTML `<link>` 标签发现站点提供的 feed URL（参数示意，均为假设命名：`site_url`）。
 
-> **勿将上述参数名当作可用工具调用**：本示例仅展示未来模块章节的结构，模块 05 当前不存在任何工具。
+> **勿将上述参数名当作可用工具调用**：本示例仅展示未来模块章节的结构，模块 06 当前不存在任何工具。
 
 **常用工作流**（示意，非可执行）：
 ```
@@ -773,7 +843,8 @@ fetch feed from "https://example.com/feed.xml" with limit 10
 
 ## 版本信息
 
-- **Skill 版本**：v0.5.0 —— 新增模块 03 · twitter-cli（Twitter/X CLI）和模块 04 · bilibili-cli（Bilibili CLI），接入推文搜索、时间线、视频搜索、热门榜与排行榜。
+- **Skill 版本**：v0.6.0 —— 新增模块 05 · xiaohongshu-cli（小红书 CLI），接入笔记搜索、热门榜（多分类）、推荐 Feed 与话题。
+  - v0.5.0 —— 新增模块 03 · twitter-cli（Twitter/X CLI）和模块 04 · bilibili-cli（Bilibili CLI），接入推文搜索、时间线、视频搜索、热门榜与排行榜。
   - v0.4.0 —— 新增模块 02 · zhihu-cli（知乎开放平台 CLI），接入知乎社区搜索、全网搜索、热榜、AI 直答。
   - v0.3.0 —— 正式定义输出模板（新增「输出模板」章节，含 TOP SIGNAL / 优先级分区 / 影响分析 / 完整示例）。
   - v0.2.2 新增专业开发流程（CI/CD、代码质量检查、自动化发布、仓库治理）。
