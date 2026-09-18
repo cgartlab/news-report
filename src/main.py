@@ -22,6 +22,10 @@ from datetime import datetime
 SKILL_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SKILL_DIR / "src"))
 
+# Load .env file before importing submodules (they read os.environ at import time)
+from env_loader import load_env
+load_env()
+
 # Import submodules
 from collect_telegram import collect_telegram
 from collect_rss import collect_rss

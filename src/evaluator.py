@@ -654,6 +654,8 @@ def _is_recent_enough(item: Item, current_year_month: str) -> bool:
 
 
 if __name__ == "__main__":
+    from env_loader import load_env
+    load_env()
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-llm", action="store_true",
                         help="Skip LLM phase, use rule verdicts only (fastest)")

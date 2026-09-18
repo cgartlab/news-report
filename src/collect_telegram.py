@@ -10,6 +10,9 @@ import os
 import subprocess
 from pathlib import Path
 
+from env_loader import load_env
+load_env()
+
 SKILL_DIR = Path(__file__).parent.parent
 SESSION_DIR = SKILL_DIR / "session"
 

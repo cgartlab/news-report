@@ -161,6 +161,8 @@ def deduplicate(items: list[Item]) -> list[Item]:
 
 
 if __name__ == "__main__":
+    from env_loader import load_env
+    load_env()
     items = load_items()
     unique = deduplicate(items)
     print(f"Unique items: {len(unique)}")

@@ -15,6 +15,9 @@ import urllib.parse
 from pathlib import Path
 from datetime import datetime, timedelta
 
+from env_loader import load_env
+load_env()
+
 SKILL_DIR = Path(__file__).parent.parent
 SEARXNG_BASE = os.environ.get("SEARXNG_URL", "http://localhost:8099")
 
