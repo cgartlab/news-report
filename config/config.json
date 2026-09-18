@@ -9,5 +9,9 @@
   "output_format": "telegram_markdown",
   "telegram_script_path": "",
   "zhihu_cli_path": "",
-  "zhihu_include_hot": true
+  "zhihu_include_hot": true,
+  "twitter_cli_path": "",
+  "twitter_include_feed": true,
+  "bilibili_cli_path": "",
+  "bilibili_include_hot": true
 }

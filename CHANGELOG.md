@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.5.0] - 2026-09-18
+
+### Added
+
+- **模块 03 · `twitter-cli`（Twitter/X CLI）**：新增 Twitter/X 信息源模块，通过 [jackwener/twitter-cli](https://github.com/jackwener/twitter-cli) 接入推文搜索、时间线、书签与用户资料。Apache 2.0 开源。
+  - `src/collect_twitter.py`：Twitter CLI 采集脚本，支持推文搜索（`search`）、时间线采集（`feed`），无鉴权时优雅跳过。
+  - CLI 路径自动检测：`TWITTER_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
+  - 集成到 `main.py` 的 `step_collect()`，作为第 5 个采集源。
+- **模块 04 · `bilibili-cli`（Bilibili CLI）**：新增 B 站信息源模块，通过 [jackwener/bilibili-cli](https://github.com/jackwener/bilibili-cli) 接入视频搜索、热门榜、排行榜与用户资料。Apache 2.0 开源。
+  - `src/collect_bilibili.py`：Bilibili CLI 采集脚本，支持视频搜索（`search`）、热门榜（`hot`）、排行榜（`rank`），部分命令无需鉴权。
+  - CLI 路径自动检测：`BILIBILI_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
+  - 集成到 `main.py` 的 `step_collect()`，作为第 6 个采集源。
+- **SKILL.md 模块 03/04 章节**：完整记录 Twitter CLI 和 Bilibili CLI 的前置条件、安装、鉴权、可用能力、使用方式与排障指南。
+- **信息源注册表更新**：模块 03 = `twitter-cli`（✅），模块 04 = `bilibili-cli`（✅），原 rss-http/news-api 顺延为模块 05/06。
+- **config.json 新增字段**：`twitter_cli_path`、`twitter_include_feed`、`bilibili_cli_path`、`bilibili_include_hot`。
+- **.env.example 新增字段**：`TWITTER_CLI_PATH`、`TWITTER_AUTH_TOKEN`、`TWITTER_CT0`、`BILIBILI_CLI_PATH`。
+
+### Changed
+
+- **模块编号调整**：rss-http 从 03 → 05，news-api 从 04 → 06。
+- **SKILL.md 扩展模块示例**：rss-http 示例标记为模块 05。
+
+---
+
 ## [0.4.0] - 2026-09-18
 
 ### Added

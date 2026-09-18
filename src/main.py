@@ -27,9 +27,11 @@ from env_loader import load_env  # noqa: E402
 load_env()
 
 # Import submodules
+from collect_bilibili import collect_bilibili  # noqa: E402
 from collect_rss import collect_rss  # noqa: E402
 from collect_search import collect_search  # noqa: E402
 from collect_telegram import collect_telegram  # noqa: E402
+from collect_twitter import collect_twitter  # noqa: E402
 from collect_zhihu import collect_zhihu  # noqa: E402
 from deduplicator import deduplicate  # noqa: E402
 from evaluator import evaluate_items  # noqa: E402
@@ -92,7 +94,17 @@ def step_collect():
     log(f"Zhihu collected: {len(zhihu_items)}")
     total += len(zhihu_items)
 
-    all_items = tg_items + rss_items + search_items + zhihu_items
+    # Twitter/X CLI (module 03) — graceful skip when unauthenticated
+    twitter_items = collect_twitter(include_feed=config.get("twitter_include_feed", True))
+    log(f"Twitter collected: {len(twitter_items)}")
+    total += len(twitter_items)
+
+    # Bilibili CLI (module 04) — graceful skip when unauthenticated
+    bilibili_items = collect_bilibili(include_hot=config.get("bilibili_include_hot", True))
+    log(f"Bilibili collected: {len(bilibili_items)}")
+    total += len(bilibili_items)
+
+    all_items = tg_items + rss_items + search_items + zhihu_items + twitter_items + bilibili_items
     with open(items_file, "a", encoding="utf-8") as f:
         for item in all_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
