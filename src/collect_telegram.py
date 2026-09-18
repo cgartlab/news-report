@@ -38,7 +38,7 @@ def collect_telegram(channels: list[dict], limit_per_channel: int = 20) -> list[
     Fetch recent messages from multiple Telegram channels.
     Returns a list of dicts with keys: title, url, summary, source, tags, date.
     """
-    items = []
+    items: list[dict[str, str]] = []
 
     script_path = Path(TG_HISTORY_SCRIPT)
     if not script_path.exists():

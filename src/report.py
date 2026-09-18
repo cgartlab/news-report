@@ -17,29 +17,7 @@ from pathlib import Path
 
 # Reuse the shared Item dataclass from evaluator
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-try:
-    from evaluator import Item
-except ImportError:
-    from dataclasses import dataclass
-
-    @dataclass
-    class Item:
-        id: str = ""
-        title: str = ""
-        url: str = ""
-        summary: str = ""
-        source: str = ""
-        source_type: str = ""
-        tags: list = None
-        date: str = ""
-        verdict: str = ""
-        verdict_reason: str = ""
-        raw_text: str = ""
-
-        def __post_init__(self):
-            if self.tags is None:
-                self.tags = []
-
+from evaluator import Item  # noqa: E402
 
 SKILL_DIR = Path(__file__).parent.parent
 

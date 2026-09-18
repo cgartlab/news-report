@@ -75,7 +75,7 @@ def parse_feed(url: str, source_name: str, tags: list[str], limit: int = 10) -> 
             for entry in entries[:limit]:
                 title = _get_text(entry, "title")
                 link_el = entry.find("link")
-                link = link_el.get("href") if link_el is not None else ""
+                link = link_el.get("href") or "" if link_el is not None else ""
                 desc = _get_text(entry, "summary") or _get_text(entry, "content") or ""
                 pub_date = _get_text(entry, "published") or _get_text(entry, "updated") or ""
 

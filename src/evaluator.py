@@ -52,7 +52,7 @@ def _http_post(url: str, payload: dict, key: str, timeout: int = 30) -> str:
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read().decode("utf-8", errors="replace")
+            return str(resp.read().decode("utf-8", errors="replace"))
     except urllib.error.HTTPError as e:
         return json.dumps(
             {"error": f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}"}
@@ -162,7 +162,7 @@ def call_llm(prompt: str) -> str:
             if "error" in resp:
                 raise ValueError(resp["error"])
             msg = resp["choices"][0]["message"]
-            return msg.get("content", msg.get("reasoning", ""))
+            return str(msg.get("content", msg.get("reasoning", "")))
         except Exception as e:
             if attempt < MAX_RETRIES:
                 delay = RETRY_DELAYS[attempt] if attempt < len(RETRY_DELAYS) else 3
@@ -523,7 +523,7 @@ Items:
     def _call_llm(p: dict) -> str:
         raw = _http_post(url, p, key, timeout=90)
         msg = json.loads(raw)["choices"][0]["message"]
-        return msg.get("content", msg.get("reasoning", ""))
+        return str(msg.get("content", msg.get("reasoning", "")))
 
     def _parse_minimax(content: str, item_count: int) -> set:
         """Parse verbose MiniMax output that includes thinking + natural language selections."""

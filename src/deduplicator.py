@@ -83,7 +83,7 @@ def _call_llm(prompt: str) -> str:
             result = resp.read().decode("utf-8", errors="replace")
             result_data = json.loads(result)
             if "choices" in result_data:
-                return result_data["choices"][0]["message"]["content"]
+                return str(result_data["choices"][0]["message"]["content"])
             return "no"
     except Exception:
         return "no"
@@ -172,7 +172,7 @@ def is_duplicate(a: Item, b: Item, threshold: float = 0.75) -> bool:
     # Also check URL overlap
     url_match = a.url and b.url and a.url == b.url
 
-    return jaccard > threshold or url_match
+    return jaccard > threshold or bool(url_match)
 
 
 def deduplicate(items: list[Item]) -> list[Item]:
@@ -182,7 +182,7 @@ def deduplicate(items: list[Item]) -> list[Item]:
     if len(items) <= 1:
         return items
 
-    unique = []
+    unique: list[Item] = []
     duplicates_found = 0
 
     for candidate in items:
