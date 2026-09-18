@@ -69,18 +69,25 @@ _llm_config = None  # (url, key, model)
 def _find_llm():
     """
     Find first working LLM API from environment variables.
-    Priority: MiniMax → SiliconFlow → DeepSeek (first with a non-empty env var wins).
-    Keys are read from: MINIMAX_API_KEY, SILICONFLOW_API_KEY, DEEPSEEK_API_KEY
+    Priority: SenseNova → MiniMax → SiliconFlow → DeepSeek (first with a non-empty env var wins).
+    Keys are read from: SENSENOVA_API_KEY, MINIMAX_API_KEY, SILICONFLOW_API_KEY, DEEPSEEK_API_KEY
     """
     global _llm_config
     if _llm_config is not None:
         return _llm_config
 
+    sensenova_key = os.environ.get("SENSENOVA_API_KEY", "").strip()
     minimax_key = os.environ.get("MINIMAX_API_KEY", "").strip()
     sf_key = os.environ.get("SILICONFLOW_API_KEY", "").strip()
     deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
 
     candidates = []
+    if sensenova_key:
+        candidates.append((
+            "https://token.sensenova.cn/v1/chat/completions",
+            sensenova_key,
+            "sensenova-6.8-flash-lite"
+        ))
     if minimax_key:
         candidates.append((
             "https://api.minimax.chat/v1/chat/completions",
@@ -111,7 +118,7 @@ def _find_llm():
         test_payload = {
             "model": model,
             "messages": [{"role": "user", "content": "hi"}],
-            "max_tokens": 3,
+            "max_tokens": 50,
         }
         raw = _http_post(url, test_payload, key, timeout=10)
         try:
@@ -140,7 +147,7 @@ def call_llm(prompt: str) -> str:
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3,
-        "max_tokens": 400,   # reduced from 600 — shorter output
+        "max_tokens": 600,   # SenseNova needs headroom for reasoning + content
     }
 
     for attempt in range(MAX_RETRIES + 1):
@@ -149,7 +156,8 @@ def call_llm(prompt: str) -> str:
             resp = json.loads(raw)
             if "error" in resp:
                 raise ValueError(resp["error"])
-            return resp["choices"][0]["message"]["content"]
+            msg = resp["choices"][0]["message"]
+            return msg.get("content", msg.get("reasoning", ""))
         except Exception as e:
             if attempt < MAX_RETRIES:
                 delay = RETRY_DELAYS[attempt] if attempt < len(RETRY_DELAYS) else 3
@@ -426,7 +434,8 @@ Items:
 
     def _call_llm(p: dict) -> str:
         raw = _http_post(url, p, key, timeout=90)
-        return json.loads(raw)["choices"][0]["message"]["content"]
+        msg = json.loads(raw)["choices"][0]["message"]
+        return msg.get("content", msg.get("reasoning", ""))
 
     def _parse_minimax(content: str, item_count: int) -> set:
         """Parse verbose MiniMax output that includes thinking + natural language selections."""
