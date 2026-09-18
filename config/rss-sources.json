@@ -1,4 +1,7 @@
 [
+  {"name": "知乎日报", "url": "http://192.168.31.111:1200/zhihu/daily", "tags": ["知乎", "热榜"], "enabled": true},
+  {"name": "36氪快讯", "url": "http://192.168.31.111:1200/36kr/newsflashes", "tags": ["创业", "快讯"], "enabled": true},
+  {"name": "豆瓣读书", "url": "http://192.168.31.111:1200/douban/doulist/120237", "tags": ["阅读", "豆瓣"], "enabled": true},
   {"name": "Anyway.FM 设计杂谈", "url": "https://anyway.fm/rss.xml", "tags": ["设计", "播客"], "enabled": true},
   {"name": "安妮薇时报 Anyway.News", "url": "https://anyway.fm/news/rss.xml", "tags": ["设计", "AI"], "enabled": true},
   {"name": "Bjango Articles", "url": "https://bjango.com/rss/articles.xml", "tags": ["设计", "工具"], "enabled": true},

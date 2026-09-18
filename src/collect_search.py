@@ -79,7 +79,7 @@ def collect_search(keywords: list[dict], limit_per_keyword: int = 5) -> list[dic
 
         try:
             req = urllib.request.Request(search_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            with urllib.request.urlopen(req, timeout=35) as resp:
                 raw = resp.read().decode("utf-8", errors="replace")
             if not raw:
                 print(f"[Search] No response for '{keyword}'", file=sys.stderr)
