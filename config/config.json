@@ -7,5 +7,14 @@
   "target_count_max": 20,
   "output_topic": null,
   "output_format": "telegram_markdown",
-  "telegram_script_path": ""
+  "telegram_script_path": "",
+  "zhihu_cli_path": "",
+  "zhihu_include_hot": true,
+  "twitter_cli_path": "",
+  "twitter_include_feed": true,
+  "bilibili_cli_path": "",
+  "bilibili_include_hot": true,
+  "xhs_cli_path": "",
+  "xhs_include_hot": true,
+  "xhs_hot_categories": ["food", "fashion"]
 }

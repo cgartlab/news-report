@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.0] - 2026-09-18
+
+### Added
+
+- **模块 05 · `xiaohongshu-cli`（小红书 CLI）**：新增小红书信息源模块，通过 [jackwener/xiaohongshu-cli](https://github.com/jackwener/xiaohongshu-cli) 接入笔记搜索、热门榜、推荐 Feed、用户资料与话题。Apache 2.0 开源。
+  - `src/collect_xhs.py`：小红书 CLI 采集脚本，支持笔记搜索（`search`）、热门榜（`hot`，支持多分类：food/fashion/cosmetics/movie/career/love/home/gaming/travel/fitness）、推荐 Feed（`feed`），无鉴权时优雅跳过。
+  - CLI 路径自动检测：`XHS_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
+  - 集成到 `main.py` 的 `step_collect()`，作为第 7 个采集源。
+- **SKILL.md 模块 05 章节**：完整记录小红书 CLI 的前置条件、安装、鉴权、可用能力、使用方式与排障指南。
+- **信息源注册表更新**：模块 05 = `xiaohongshu-cli`（✅ 可用），原 rss-http/news-api 顺延为模块 06/07。
+- **config.json 新增字段**：`xhs_cli_path`、`xhs_include_hot`、`xhs_hot_categories`。
+- **.env.example 新增字段**：`XHS_CLI_PATH`。
+
+### Changed
+
+- **模块编号调整**：rss-http 从 05 → 06，news-api 从 06 → 07。
+- **SKILL.md 扩展模块示例**：rss-http 示例标记为模块 06。
+
+---
+
+## [0.5.0] - 2026-09-18
+
+### Added
+
+- **模块 03 · `twitter-cli`（Twitter/X CLI）**：新增 Twitter/X 信息源模块，通过 [jackwener/twitter-cli](https://github.com/jackwener/twitter-cli) 接入推文搜索、时间线、书签与用户资料。Apache 2.0 开源。
+  - `src/collect_twitter.py`：Twitter CLI 采集脚本，支持推文搜索（`search`）、时间线采集（`feed`），无鉴权时优雅跳过。
+  - CLI 路径自动检测：`TWITTER_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
+  - 集成到 `main.py` 的 `step_collect()`，作为第 5 个采集源。
+- **模块 04 · `bilibili-cli`（Bilibili CLI）**：新增 B 站信息源模块，通过 [jackwener/bilibili-cli](https://github.com/jackwener/bilibili-cli) 接入视频搜索、热门榜、排行榜与用户资料。Apache 2.0 开源。
+  - `src/collect_bilibili.py`：Bilibili CLI 采集脚本，支持视频搜索（`search`）、热门榜（`hot`）、排行榜（`rank`），部分命令无需鉴权。
+  - CLI 路径自动检测：`BILIBILI_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
+  - 集成到 `main.py` 的 `step_collect()`，作为第 6 个采集源。
+- **SKILL.md 模块 03/04 章节**：完整记录 Twitter CLI 和 Bilibili CLI 的前置条件、安装、鉴权、可用能力、使用方式与排障指南。
+- **信息源注册表更新**：模块 03 = `twitter-cli`（✅），模块 04 = `bilibili-cli`（✅），原 rss-http/news-api 顺延为模块 05/06。
+- **config.json 新增字段**：`twitter_cli_path`、`twitter_include_feed`、`bilibili_cli_path`、`bilibili_include_hot`。
+- **.env.example 新增字段**：`TWITTER_CLI_PATH`、`TWITTER_AUTH_TOKEN`、`TWITTER_CT0`、`BILIBILI_CLI_PATH`。
+
+### Changed
+
+- **模块编号调整**：rss-http 从 03 → 05，news-api 从 04 → 06。
+- **SKILL.md 扩展模块示例**：rss-http 示例标记为模块 05。
+
+---
+
+## [0.4.0] - 2026-09-18
+
+### Added
+
+- **模块 02 · `zhihu-cli`（知乎开放平台 CLI）**：新增知乎信息源模块，通过知乎官方 CLI 接入社区搜索、全网搜索、热榜、AI 直答、问题推荐与回答摘要。
+  - `src/collect_zhihu.py`：Zhihu CLI 采集脚本，支持知乎社区搜索（`search zhihu`）、全网搜索（`search global`）、热榜采集（`hot`），无鉴权时优雅跳过。
+  - CLI 路径自动检测：`ZHIHU_CLI_PATH` 环境变量 → `config.json` → 已知路径 → PATH 搜索。
+  - 集成到 `main.py` 的 `step_collect()`，作为第 4 个采集源（RSS + Search + Telegram + Zhihu）。
+- **SKILL.md 模块 02 章节**：完整记录知乎 CLI 的前置条件、安装初始化、环境变量、可用能力、使用方式与排障指南。
+- **信息源注册表更新**：模块 02 = `zhihu-cli`（✅ 可用），原 rss-http/news-api 顺延为模块 03/04。
+- **config.json 新增字段**：`zhihu_cli_path`、`zhihu_include_hot`。
+- **.env.example 新增字段**：`ZHIHU_CLI_PATH`、`ZHIHU_ACCESS_SECRET`。
+
+### Changed
+
+- **模块编号调整**：rss-http 从 02 → 03，news-api 从 03 → 04。
+- **SKILL.md 扩展模块示例**：模块 02 占位替换为正式 zhihu-cli 章节，rss-http 示例标记为模块 03。
+
+---
+
 ## [0.3.0] - 2026-09-18
 
 ### Added
