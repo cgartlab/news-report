@@ -13,10 +13,11 @@ Speed optimizations:
 import json
 import re
 import sys
-import subprocess
 import time
 import os
 import argparse
+import urllib.request
+import urllib.error
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -33,6 +34,32 @@ RETRY_DELAYS = (5,)       # seconds before retry
 LLM_TIMEOUT = 50          # seconds per LLM call (bump from 40)
 MAX_WORKERS = 3           # parallel LLM calls (was 4)
 
+
+# ─── HTTP Helper ─────────────────────────────────────────────────────────────
+
+def _http_post(url: str, payload: dict, key: str, timeout: int = 30) -> str:
+    """POST JSON to an API endpoint using urllib (cross-platform, no curl)."""
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        return json.dumps({"error": f"HTTP {e.code}: {e.read().decode('utf-8', errors='replace')[:200]}"})
+    except urllib.error.URLError as e:
+        return json.dumps({"error": str(e.reason)})
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 # ─── LLM API Discovery ───────────────────────────────────────────────────────
 
 _llm_lock = Lock()
@@ -41,39 +68,18 @@ _llm_config = None  # (url, key, model)
 
 def _find_llm():
     """
-    Find first working LLM API.
-    Priority: 1) SiliconFlow DeepSeek V4 Flash, 2) MiniMax, 3) DeepSeek direct
+    Find first working LLM API from environment variables.
+    Priority: MiniMax → SiliconFlow → DeepSeek (first with a non-empty env var wins).
+    Keys are read from: MINIMAX_API_KEY, SILICONFLOW_API_KEY, DEEPSEEK_API_KEY
     """
     global _llm_config
     if _llm_config is not None:
         return _llm_config
 
-    # Known working API keys (by prefix hint to avoid picking wrong keys)
-    known_keys = {
-        "sk-ecs": "ecsvsdbhbxoeljaeyibeoxqegwgiefwnsuikgequaefanxyr",  # SiliconFlow (openclaw)
-        "sk-khk": "khkmvmpyafrotkqlvlmfbadenehotulkhyfrymjxfcounynp",  # SiliconFlow (obsidian)
-        "sk-13d": "13d4d8c5e7cb4a2dbbf60dcf77c751eb",                  # DeepSeek (Obsidian)
-        "sk-c8a": "c8a65d1ae64c4b3090bdc8873f39d7a7",                  # DeepSeek (OpenCode)
-    }
+    minimax_key = os.environ.get("MINIMAX_API_KEY", "").strip()
+    sf_key = os.environ.get("SILICONFLOW_API_KEY", "").strip()
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
 
-    found_keys = {}
-    tools_md = Path("/root/.openclaw/workspace/TOOLS.md")
-    if tools_md.exists():
-        text = tools_md.read_text()
-        for line in text.splitlines():
-            for part in line.split("|"):
-                part = part.strip()
-                if len(part) < 20:
-                    continue
-                for hint, key_content in known_keys.items():
-                    if hint in part and key_content in part:
-                        found_keys[hint] = part
-
-    sf_key = found_keys.get("sk-ecs") or found_keys.get("sk-khk")
-    deepseek_key = found_keys.get("sk-13d") or found_keys.get("sk-c8a")
-    minimax_key = os.environ.get("MINIMAX_API_KEY", "")
-
-    # MiniMax FIRST (Token Plan — free with subscription), then SiliconFlow, then DeepSeek
     candidates = []
     if minimax_key:
         candidates.append((
@@ -94,24 +100,23 @@ def _find_llm():
             "deepseek-chat"
         ))
 
+    if not candidates:
+        with _llm_lock:
+            _llm_config = (None, None, None)
+        print("[Evaluator] No LLM API keys set — using rule-based only "
+              "(set MINIMAX_API_KEY / SILICONFLOW_API_KEY / DEEPSEEK_API_KEY)")
+        return None, None, None
+
     for url, key, model in candidates:
-        if not key:
-            continue
         test_payload = {
             "model": model,
             "messages": [{"role": "user", "content": "hi"}],
             "max_tokens": 3,
         }
+        raw = _http_post(url, test_payload, key, timeout=10)
         try:
-            proc = subprocess.run(
-                ["curl", "-s", url, "-X", "POST",
-                 "-H", f"Authorization: Bearer {key}",
-                 "-H", "Content-Type: application/json",
-                 "-d", json.dumps(test_payload)],
-                capture_output=True, text=True, timeout=10,
-            )
-            if "error" not in proc.stdout[:200].lower() and \
-               "invalid" not in proc.stdout[:200].lower():
+            resp = json.loads(raw)
+            if "error" not in resp and "choices" in resp:
                 with _llm_lock:
                     _llm_config = (url, key, model)
                 print(f"[Evaluator] LLM ready: {url.split('/')[2]} / {model}")
@@ -121,7 +126,7 @@ def _find_llm():
 
     with _llm_lock:
         _llm_config = (None, None, None)
-    print("[Evaluator] No LLM API — using rule-based only")
+    print("[Evaluator] No LLM API responded — using rule-based only")
     return None, None, None
 
 
@@ -140,14 +145,10 @@ def call_llm(prompt: str) -> str:
 
     for attempt in range(MAX_RETRIES + 1):
         try:
-            proc = subprocess.run(
-                ["curl", "-s", url, "-X", "POST",
-                 "-H", f"Authorization: Bearer {key}",
-                 "-H", "Content-Type: application/json",
-                 "-d", json.dumps(payload)],
-                capture_output=True, text=True, timeout=LLM_TIMEOUT,
-            )
-            resp = json.loads(proc.stdout)
+            raw = _http_post(url, payload, key, timeout=LLM_TIMEOUT)
+            resp = json.loads(raw)
+            if "error" in resp:
+                raise ValueError(resp["error"])
             return resp["choices"][0]["message"]["content"]
         except Exception as e:
             if attempt < MAX_RETRIES:
@@ -424,14 +425,8 @@ Items:
     }
 
     def _call_llm(p: dict) -> str:
-        proc = subprocess.run(
-            ["curl", "-s", url, "-X", "POST",
-             "-H", f"Authorization: Bearer {key}",
-             "-H", "Content-Type: application/json",
-             "-d", json.dumps(p, ensure_ascii=False)],
-            capture_output=True, text=True, timeout=90,
-        )
-        return json.loads(proc.stdout)["choices"][0]["message"]["content"]
+        raw = _http_post(url, p, key, timeout=90)
+        return json.loads(raw)["choices"][0]["message"]["content"]
 
     def _parse_minimax(content: str, item_count: int) -> set:
         """Parse verbose MiniMax output that includes thinking + natural language selections."""

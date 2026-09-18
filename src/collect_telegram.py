@@ -6,12 +6,27 @@ Reuses the existing telegram-history session and credentials.
 
 import json
 import sys
+import os
 import subprocess
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).parent.parent
 SESSION_DIR = SKILL_DIR / "session"
-TG_HISTORY_SCRIPT = SKILL_DIR.parent / "telegram-history" / "scripts" / "tg_history.py"
+
+# Telegram history script path — configurable via env var or config.json
+# Fallback: look for telegram-history sibling directory
+TG_HISTORY_SCRIPT = os.environ.get("TG_HISTORY_SCRIPT", "").strip()
+if not TG_HISTORY_SCRIPT:
+    # Try to read from config.json
+    _cfg_path = SKILL_DIR / "config" / "config.json"
+    if _cfg_path.exists():
+        try:
+            _cfg = json.loads(_cfg_path.read_text())
+            TG_HISTORY_SCRIPT = _cfg.get("telegram_script_path", "").strip()
+        except Exception:
+            pass
+if not TG_HISTORY_SCRIPT:
+    TG_HISTORY_SCRIPT = str(SKILL_DIR.parent / "telegram-history" / "scripts" / "tg_history.py")
 
 
 def collect_telegram(channels: list[dict], limit_per_channel: int = 20) -> list[dict]:
@@ -21,6 +36,13 @@ def collect_telegram(channels: list[dict], limit_per_channel: int = 20) -> list[
     """
     items = []
 
+    script_path = Path(TG_HISTORY_SCRIPT)
+    if not script_path.exists():
+        print(f"[TG] telegram-history script not found at {TG_HISTORY_SCRIPT} — "
+              f"skip Telegram collection. Set TG_HISTORY_SCRIPT env var or "
+              f"config.telegram_script_path to enable.", file=sys.stderr)
+        return items
+
     for ch in channels:
         chat_id = ch.get("chat_id")
         name = ch.get("name", ch.get("username", str(chat_id)))
@@ -29,6 +51,12 @@ def collect_telegram(channels: list[dict], limit_per_channel: int = 20) -> list[
 
         if not chat_id:
             print(f"[TG] Skipping {name}: no chat_id", file=sys.stderr)
+            continue
+
+        # Skip placeholder values like {CHANNEL_ID}
+        if chat_id.startswith("{") and chat_id.endswith("}"):
+            print(f"[TG] Skipping {name}: placeholder chat_id '{chat_id}' — "
+                  f"replace with real chat_id in config", file=sys.stderr)
             continue
 
         try:

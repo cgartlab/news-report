@@ -7,13 +7,16 @@ with no API key required and no rate limits.
 
 import json
 import sys
-import subprocess
+import os
 import re
+import urllib.request
+import urllib.error
+import urllib.parse
 from pathlib import Path
 from datetime import datetime, timedelta
 
 SKILL_DIR = Path(__file__).parent.parent
-SEARXNG_BASE = "http://192.168.31.111:8099"
+SEARXNG_BASE = os.environ.get("SEARXNG_URL", "http://localhost:8099")
 
 
 def _parse_searxng_date(date_str: str) -> str:
@@ -61,7 +64,6 @@ def collect_search(keywords: list[dict], limit_per_keyword: int = 5) -> list[dic
         if not keyword:
             continue
 
-        import urllib.parse
         query = urllib.parse.quote(keyword)
         # Use default engines (no specific engine restriction)
         search_url = (
@@ -73,14 +75,9 @@ def collect_search(keywords: list[dict], limit_per_keyword: int = 5) -> list[dic
         )
 
         try:
-            proc = subprocess.run(
-                ["curl", "-s", "--max-time", "15", search_url],
-                capture_output=True,
-                text=True,
-                timeout=20,
-            )
-
-            raw = proc.stdout
+            req = urllib.request.Request(search_url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
             if not raw:
                 print(f"[Search] No response for '{keyword}'", file=sys.stderr)
                 continue
@@ -122,8 +119,8 @@ def collect_search(keywords: list[dict], limit_per_keyword: int = 5) -> list[dic
 
             print(f"[Search] '{keyword}': {count} results")
 
-        except subprocess.TimeoutExpired:
-            print(f"[Search] Timeout for '{keyword}'", file=sys.stderr)
+        except urllib.error.URLError as e:
+            print(f"[Search] Network error for '{keyword}': {e.reason}", file=sys.stderr)
         except json.JSONDecodeError as e:
             print(f"[Search] JSON parse error for '{keyword}': {e}", file=sys.stderr)
         except Exception as e:

@@ -6,5 +6,6 @@
   "target_count_min": 20,
   "target_count_max": 20,
   "output_topic": null,
-  "output_format": "telegram_markdown"
+  "output_format": "telegram_markdown",
+  "telegram_script_path": ""
 }

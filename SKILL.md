@@ -285,4 +285,4 @@ metadata:
 | prompts/report.md | 旧脚本链路 prompt（已弃用，仅存档） | ⚠️ 不一致时以 SKILL.md 为准 |
 | src/report.py | 旧脚本链路代码模板（已弃用，仅存档） | ⚠️ 不一致时以 SKILL.md 为准 |
 
-**当前执行路径**：由 Agent 直接按 SKILL.md 模板生成（不经过 prompts/ 和 src/ 脚本）。脚本链路保留仅供历史参考。
+**当前执行路径**：由 Agent 直接按 SKILL.md 模板生成（不经过 archive/prompts/ 和 src/ 脚本）。脚本链路已修复跨平台和安全性问题，可作为离线/批量兜底工具使用（需先配置 .env 环境变量）。

@@ -3,12 +3,14 @@
     "name": "示例频道1",
     "username": "example_channel_1",
     "chat_id": "{CHANNEL_ID}",
-    "tags": ["示例", "技术"]
+    "tags": ["示例", "技术"],
+    "_comment": "⚠️ 需替换 {CHANNEL_ID} 为真实 Telegram chat_id 后启用"
   },
   {
     "name": "示例频道2",
     "username": "example_channel_2",
     "chat_id": "{CHANNEL_ID_2}",
-    "tags": ["新闻", "科技"]
+    "tags": ["新闻", "科技"],
+    "_comment": "⚠️ 需替换 {CHANNEL_ID_2} 为真实 Telegram chat_id 后启用"
   }
 ]

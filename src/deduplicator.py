@@ -6,8 +6,10 @@ Threshold: items with >75% semantic overlap are merged (the more complete one wi
 """
 
 import json
-import subprocess
 import sys
+import os
+import urllib.request
+import urllib.error
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -55,11 +57,10 @@ def load_items() -> list[Item]:
 
 
 def _call_llm(prompt: str) -> str:
-    api_key = _get_api_key()
+    api_key = os.environ.get("SILICONFLOW_API_KEY", "").strip()
     if not api_key:
         return "no"
 
-    # Try SiliconFlow endpoint
     url = "https://api.siliconflow.com/v1/chat/completions"
     payload = {
         "model": "deepseek-ai/DeepSeek-V4-Flash",
@@ -68,34 +69,25 @@ def _call_llm(prompt: str) -> str:
         "max_tokens": 50,
     }
 
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
     try:
-        proc = subprocess.run(
-            ["curl", "-s", url, "-X", "POST",
-             "-H", f"Authorization: Bearer {api_key}",
-             "-H", "Content-Type: application/json",
-             "-d", json.dumps(payload)],
-            capture_output=True, text=True, timeout=20,
-        )
-        resp = json.loads(proc.stdout)
-        if "choices" in resp:
-            return resp["choices"][0]["message"]["content"]
-        return "no"
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            result = resp.read().decode("utf-8", errors="replace")
+            result_data = json.loads(result)
+            if "choices" in result_data:
+                return result_data["choices"][0]["message"]["content"]
+            return "no"
     except Exception:
         return "no"
-
-
-def _get_api_key() -> str:
-    """Return SiliconFlow API key if found in TOOLS.md, else empty."""
-    tools_md = Path("/root/.openclaw/workspace/TOOLS.md")
-    if not tools_md.exists():
-        return ""
-    for line in tools_md.read_text().splitlines():
-        if 'SiliconFlow' in line or 'DeepSeek' in line:
-            for part in line.split('|'):
-                part = part.strip()
-                if part.startswith('sk-'):
-                    return part
-    return ""
 
 
 DEDUP_PROMPT = """\
