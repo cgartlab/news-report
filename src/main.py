@@ -30,6 +30,7 @@ load_env()
 from collect_rss import collect_rss  # noqa: E402
 from collect_search import collect_search  # noqa: E402
 from collect_telegram import collect_telegram  # noqa: E402
+from collect_zhihu import collect_zhihu  # noqa: E402
 from deduplicator import deduplicate  # noqa: E402
 from evaluator import evaluate_items  # noqa: E402
 from report import generate_report, load_curated_items, save_report  # noqa: E402
@@ -86,7 +87,12 @@ def step_collect():
     log(f"Search collected: {len(search_items)}")
     total += len(search_items)
 
-    all_items = tg_items + rss_items + search_items
+    # Zhihu CLI (module 02) — graceful skip when unauthenticated
+    zhihu_items = collect_zhihu(include_hot=config.get("zhihu_include_hot", True))
+    log(f"Zhihu collected: {len(zhihu_items)}")
+    total += len(zhihu_items)
+
+    all_items = tg_items + rss_items + search_items + zhihu_items
     with open(items_file, "a", encoding="utf-8") as f:
         for item in all_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")

@@ -48,10 +48,11 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 | 模块 | 数据访问 | 可用检索能力 | 配置项（环境变量） | 状态 |
 |------|----------|--------------|--------------------|------|
 | 模块 01 · `miniflux`（Miniflux RSS，经 miniflux-mcp MCP） | MCP 服务器 | 分类 / 订阅源浏览、全文搜索、未读 / 星标、分页排序（详见下节） | `MINIFLUX_BASE_URL`、`MINIFLUX_TOKEN`、`MINIFLUX_USERNAME`、`MINIFLUX_PASSWORD` | ✅ 可用 |
-| 模块 02 · `rss-http`（直接抓取 RSS / Atom 源，示例占位） | HTTP | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
-| 模块 03 · `news-api`（NewsAPI / NewsData.io 等聚合 API，示例占位） | HTTP API | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
+| 模块 02 · `zhihu-cli`（知乎开放平台 CLI） | CLI 二进制 | 知乎搜索、全网搜索、热榜、直答、问题推荐、回答摘要（详见下节） | `ZHIHU_CLI_PATH`、`ZHIHU_ACCESS_SECRET` | ✅ 可用（需鉴权） |
+| 模块 03 · `rss-http`（直接抓取 RSS / Atom 源，示例占位） | HTTP | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
+| 模块 04 · `news-api`（NewsAPI / NewsData.io 等聚合 API，示例占位） | HTTP API | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
 
-> 模块 02 / 03 **仅为架构示例占位**：当前不存在对应的工具、命令或脚本，检索能力与配置项一律待下阶段设计；本版不得向用户声称可调用它们，也不得在回复中伪造其工具名。
+> 模块 03 / 04 **仅为架构示例占位**：当前不存在对应的工具、命令或脚本，检索能力与配置项一律待下阶段设计；本版不得向用户声称可调用它们，也不得在回复中伪造其工具名。
 
 ### 扩展方式
 
@@ -245,7 +246,7 @@ searchEntries({ starred: true, limit: 10 })
 
 ## 维护提示
 
-- 本仓库由 `miniflux-mcp-skill` 于 v0.2.0 更名重定位为 `news-report`（当前版本 v0.3.0）；后续新增 / 修改模块请遵守「信息源模块化架构」与「通用约定」，并同步 CHANGELOG。
+- 本仓库由 `miniflux-mcp-skill` 于 v0.2.0 更名重定位为 `news-report`（当前版本 v0.4.0）；后续新增 / 修改模块请遵守「信息源模块化架构」与「通用约定」，并同步 CHANGELOG。
 - **模块 01 专属**：方案 B 的 Basic Auth 补丁是本地改动，**不随 npm 包分发**；升级 `miniflux-mcp` 后必须重新打补丁。
 - **模块 01 专属**：上游 miniflux-mcp 为只读服务器，且只支持 API Token；如上游后续原生支持 Basic Auth，可放弃方案 B。
 - 若不确定搜索意图（`search` 是关键词还是某个订阅源名称），先向用户澄清，避免误判。
@@ -329,11 +330,85 @@ news-report 的模块化架构遵循**单一职责**与**接口隔离**原则：
 | 中文关键词搜索无结果 | Miniflux 全文搜索基于 PostgreSQL 默认配置，对中文分词支持有限 | 将关键词调整为短语、用 `category_id` / `feed_id` 限定范围，或先用英文标题词搜索再在结果中筛选 |
 | 服务器日志出现 `ECONNRESET` | 网络不稳定或 Miniflux 实例负载过高 | 检查网络连通性；如需增加超时，需修改 miniflux-mcp 源码 |
 
+### 模块 02：Zhihu CLI（知乎开放平台）
+
+通过 [知乎开放平台 CLI](https://developer.zhihu.com/) 接入知乎社区搜索、全网搜索、热榜、AI 直答、问题推荐与回答摘要。CLI 由知乎官方维护，安装到用户目录，不修改 PATH，不需要管理员权限。
+
+> 完整文档见 `.skills/zhihu-cli/zhihu/SKILL.md`（v0.7.1）。
+
+#### 前置条件
+
+- zhihu-cli >= 0.6.0（由 Skill 的 `scripts/setup.sh` 或 `scripts/setup.ps1` 自动安装）
+- 知乎开放平台 Access Secret（[https://developer.zhihu.com/profile](https://developer.zhihu.com/profile) 登录生成）
+
+#### 安装与初始化
+
+```bash
+# macOS / Linux
+bash <skill-dir>/scripts/setup.sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File <skill-dir>\scripts\setup.ps1
+```
+
+安装后配置 Access Secret：
+
+```bash
+# 交互式（推荐）
+<binary_path> auth set
+
+# 管道输入（脚本化）
+echo "YOUR_SECRET" | <binary_path> auth set --secret-stdin
+```
+
+验证：
+
+```bash
+<binary_path> auth status --verify
+```
+
+#### 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `ZHIHU_CLI_PATH` | CLI 二进制路径（自动检测时可不设） |
+| `ZHIHU_ACCESS_SECRET` | headless 模式的 Access Secret（替代 CLI auth） |
+
+#### 可用能力
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `search zhihu` | 搜索知乎社区内容（回答、文章、经验） | `<CLI> search zhihu --query "AI工具" --count 10` |
+| `search global` | 搜索全网来源（知乎之外） | `<CLI> search global --query "AI趋势" --count 10` |
+| `hot` | 获取知乎热榜 | `<CLI> hot --limit 20` |
+| `answer` | 调用知乎 AI 直答 | `<CLI> answer --query "问题"` |
+| `question recommend` | 发现待回答问题 | `<CLI> question recommend --count 5` |
+| `question answers` | 查看问题回答摘要 | `<CLI> question answers <url>` |
+| `quota` | 查看 API 剩余额度 | `<CLI> quota` |
+
+#### 在 news-report 中的使用
+
+脚本路径通过 `src/collect_zhihu.py` 集成，支持：
+- 知乎社区搜索（`search zhihu`）
+- 全网搜索（`search global`）
+- 热榜采集（`hot`）
+
+无鉴权时优雅跳过，不影响其他采集模块。
+
+#### 排障
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| `AUTH_REQUIRED` | 未配置 Access Secret | 在 developer.zhihu.com/profile 生成并配置 |
+| `CLI not found` | 未安装 CLI | 运行 `scripts/setup.sh` 或 `setup.ps1` |
+| `incompatible` | CLI 版本过低 | 运行 `scripts/run.sh status` 检查，然后重新 setup |
+| `rate_limit` | 请求过于频繁 | 降低并发，增加延迟 |
+
 ### 扩展模块示例（规划中模块参考）
 
 以下为规划中模块的**假设性**设计，用于展示模块章节应包含的内容结构：
 
-#### 模块 02 · `rss-http`（直接抓取 RSS/Atom 源）
+#### 模块 03 · `rss-http`（直接抓取 RSS/Atom 源）
 
 **前置条件**：
 - Node.js >= 18 或 Python >= 3.9（视实现语言而定）
@@ -350,7 +425,7 @@ news-report 的模块化架构遵循**单一职责**与**接口隔离**原则：
 - 抓取并解析指定 URL 的 RSS/Atom 源，返回标准化条目列表（参数示意，均为假设命名：`url`、`limit?`）。
 - 通过 HTML `<link>` 标签发现站点提供的 feed URL（参数示意，均为假设命名：`site_url`）。
 
-> **勿将上述参数名当作可用工具调用**：本示例仅展示未来模块章节的结构，模块 02 当前不存在任何工具。
+> **勿将上述参数名当作可用工具调用**：本示例仅展示未来模块章节的结构，模块 03 当前不存在任何工具。
 
 **常用工作流**（示意，非可执行）：
 ```
@@ -574,7 +649,8 @@ fetch feed from "https://example.com/feed.xml" with limit 10
 
 ## 版本信息
 
-- **Skill 版本**：v0.3.0 —— 正式定义输出模板（新增「输出模板」章节，含 TOP SIGNAL / 优先级分区 / 影响分析 / 完整示例）。
+- **Skill 版本**：v0.4.0 —— 新增模块 02 · zhihu-cli（知乎开放平台 CLI），接入知乎社区搜索、全网搜索、热榜、AI 直答。
+  - v0.3.0 —— 正式定义输出模板（新增「输出模板」章节，含 TOP SIGNAL / 优先级分区 / 影响分析 / 完整示例）。
   - v0.2.2 新增专业开发流程（CI/CD、代码质量检查、自动化发布、仓库治理）。
   - v0.2.1 修复工具签名与参数表，新增高级指南章节。
   - v0.2.0 为仓库更名重定位（`miniflux-mcp-skill` → `news-report`，引入模块化架构与通用约定）；输出格式待下一阶段设计。

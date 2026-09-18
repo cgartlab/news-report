@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.4.0] - 2026-09-18
+
+### Added
+
+- **模块 02 · `zhihu-cli`（知乎开放平台 CLI）**：新增知乎信息源模块，通过知乎官方 CLI 接入社区搜索、全网搜索、热榜、AI 直答、问题推荐与回答摘要。
+  - `src/collect_zhihu.py`：Zhihu CLI 采集脚本，支持知乎社区搜索（`search zhihu`）、全网搜索（`search global`）、热榜采集（`hot`），无鉴权时优雅跳过。
+  - CLI 路径自动检测：`ZHIHU_CLI_PATH` 环境变量 → `config.json` → 已知路径 → PATH 搜索。
+  - 集成到 `main.py` 的 `step_collect()`，作为第 4 个采集源（RSS + Search + Telegram + Zhihu）。
+- **SKILL.md 模块 02 章节**：完整记录知乎 CLI 的前置条件、安装初始化、环境变量、可用能力、使用方式与排障指南。
+- **信息源注册表更新**：模块 02 = `zhihu-cli`（✅ 可用），原 rss-http/news-api 顺延为模块 03/04。
+- **config.json 新增字段**：`zhihu_cli_path`、`zhihu_include_hot`。
+- **.env.example 新增字段**：`ZHIHU_CLI_PATH`、`ZHIHU_ACCESS_SECRET`。
+
+### Changed
+
+- **模块编号调整**：rss-http 从 02 → 03，news-api 从 03 → 04。
+- **SKILL.md 扩展模块示例**：模块 02 占位替换为正式 zhihu-cli 章节，rss-http 示例标记为模块 03。
+
+---
+
 ## [0.3.0] - 2026-09-18
 
 ### Added
