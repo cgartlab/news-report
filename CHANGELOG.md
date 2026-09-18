@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.2] - 2026-09-18
+
+### Added
+
+- **GitHub Actions: 代码质量检查**（`.github/workflows/lint.yml`）：ruff lint + ruff format check + mypy type check（Python 3.10–3.13 matrix）+ JSON 配置验证 + .env.example 格式检查。
+- **GitHub Actions: 自动化发布**（`.github/workflows/release.yml`）：tag 推送或手动触发 → 验证 CHANGELOG 版本一致性 → 检查 SKILL.md / AGENTS.md / CHANGELOG.md 版本同步 → 自动创建 GitHub Release（含 release notes）。
+- **GitHub Actions: 文档检查**（`.github/workflows/docs-check.yml`）：Markdown 尾随空格检查 + 代码块标记配平检查 + 版本一致性检查。
+- **pyproject.toml**：Python 项目配置（ruff lint + format + mypy + isort），统一代码风格与类型检查规则。
+- **Pre-commit hooks**（`.pre-commit-config.yaml`）：ruff fix/format、尾随空格、文件末尾换行、YAML/JSON 验证、merge 冲突检测、私钥检测、禁止直推 main。
+- **仓库治理文件**：`CODEOWNERS`（代码所有权）、`PULL_REQUEST_TEMPLATE.md`（PR 模板）、`ISSUE_TEMPLATE/`（bug/feature 模板）、`CONTRIBUTING.md`（贡献指南，含开发设置、分支策略、提交规范、质量门禁）。
+
+### Changed
+
+- **README.md 专业化重写**：新增架构图、信息源注册表、Quick Start、开发指南、分支策略、发布流程、贡献指引；添加 CI/Release badge。
+- **版权信息标准化**：所有新增文件头部添加 `Copyright (c) 2026 CGArtLab. CC BY-NC-SA 4.0.`。
+
+---
+
 ## [0.2.1] - 2026-09-11
 
 ### Fixed

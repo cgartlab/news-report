@@ -1,0 +1,44 @@
+# Copyright (c) 2026 CGArtLab. CC BY-NC-SA 4.0.
+
+[project]
+name = "news-report"
+version = "0.2.1"
+description = "Modular news-gathering Agent Skill"
+requires-python = ">=3.10"
+license = "CC-BY-NC-SA-4.0"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+no_implicit_optional = true
+ignore_missing_imports = true
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]

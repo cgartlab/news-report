@@ -1,0 +1,79 @@
+# Copyright (c) 2026 CGArtLab. CC BY-NC-SA 4.0.
+name: Documentation Check
+
+on:
+  pull_request:
+    paths:
+      - "*.md"
+      - ".github/**"
+  push:
+    branches: [main]
+    paths:
+      - "*.md"
+      - ".github/**"
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check markdown formatting (no trailing spaces, no tabs)
+        run: |
+          errors=0
+          for f in *.md .github/**/*.md; do
+            [ -f "$f" ] || continue
+            # Check trailing whitespace
+            if grep -Pn ' +$' "$f" > /dev/null; then
+              echo "::warning::$f has trailing whitespace"
+              grep -Pn ' +$' "$f" | head -3
+              errors=$((errors + 1))
+            fi
+            # Check tab characters
+            if grep -Pn '\t' "$f" > /dev/null; then
+              echo "::warning::$f contains tab characters"
+              errors=$((errors + 1))
+            fi
+          done
+          if [ $errors -gt 0 ]; then
+            echo "::error::$errors file(s) with formatting issues"
+            exit 1
+          fi
+          echo "✓ All markdown files pass formatting check"
+
+      - name: Check code block balance
+        run: |
+          python3 -c "
+          import sys
+          from pathlib import Path
+          files = list(Path('.').glob('*.md')) + list(Path('.github').glob('**/*.md')) if Path('.github').exists() else list(Path('.').glob('*.md'))
+          for f in files:
+              content = f.read_text()
+              fence_count = content.count('\`\`\`')
+              if fence_count % 2 != 0:
+                  print(f'::error::{f}: unbalanced code fences ({fence_count} occurrences)')
+                  sys.exit(1)
+          print('✓ All code fences balanced')
+          "
+
+      - name: Check version consistency
+        run: |
+          python3 -c "
+          import re
+          from pathlib import Path
+
+          versions = {}
+          for name, pattern in [('SKILL.md', r'v(\d+\.\d+\.\d+)'), ('AGENTS.md', r'v(\d+\.\d+\.\d+)'), ('CHANGELOG.md', r'## \[(\d+\.\d+\.\d+)\]')]:
+              f = Path(name)
+              if f.exists():
+                  text = f.read_text()
+                  m = re.findall(pattern, text)
+                  if m:
+                      versions[name] = m[0]
+
+          if len(versions) >= 2:
+              vals = list(versions.values())
+              if len(set(vals)) > 1:
+                  print(f'::warning::Version mismatch: {versions}')
+              else:
+                  print(f'✓ Version consistent across files: {vals[0]}')
+          "

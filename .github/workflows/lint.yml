@@ -1,0 +1,70 @@
+# Copyright (c) 2026 CGArtLab. CC BY-NC-SA 4.0.
+name: Lint & Type Check
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  lint-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install linting tools
+        run: |
+          pip install ruff mypy
+      - name: Ruff lint
+        run: ruff check src/ --config pyproject.toml
+      - name: Ruff format check
+        run: ruff format --check src/ --config pyproject.toml
+      - name: Mypy type check
+        run: mypy src/ --config-file pyproject.toml
+
+  lint-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON config files
+        run: |
+          python3 -c "
+          import json, sys
+          from pathlib import Path
+          config_dir = Path('config')
+          if config_dir.exists():
+              for f in config_dir.glob('*.json'):
+                  try:
+                      json.loads(f.read_text())
+                      print(f'  ✓ {f}')
+                  except json.JSONDecodeError as e:
+                      print(f'  ✗ {f}: {e}')
+                      sys.exit(1)
+          else:
+              print('  config/ directory not found, skipping')
+          "
+      - name: Validate .env.example format
+        run: |
+          python3 -c "
+          import sys
+          from pathlib import Path
+          env = Path('.env.example')
+          if env.exists():
+              for i, line in enumerate(env.read_text().splitlines(), 1):
+                  line = line.strip()
+                  if not line or line.startswith('#'):
+                      continue
+                  if '=' not in line:
+                      print(f'  ✗ .env.example:{i}: missing = sign')
+                      sys.exit(1)
+              print('  ✓ .env.example format OK')
+          else:
+              print('  .env.example not found, skipping')
+          "

@@ -1,0 +1,23 @@
+# Copyright (c) 2026 CGArtLab. CC BY-NC-SA 4.0.
+
+# Default ownership
+* @cgartlab
+
+# Core skill files require careful review
+SKILL.md @cgartlab
+AGENTS.md @cgartlab
+CHANGELOG.md @cgartlab
+
+# Python source code
+src/**/*.py @cgartlab
+
+# Configuration files
+config/**/*.json @cgartlab
+.env.example @cgartlab
+
+# GitHub workflows
+.github/workflows/*.yml @cgartlab
+
+# Architecture files
+pyproject.toml @cgartlab
+.pre-commit-config.yaml @cgartlab

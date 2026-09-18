@@ -1,0 +1,73 @@
+# Copyright (c) 2026 CGArtLab. CC BY-NC-SA 4.0.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.3.0)"
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check tag matches CHANGELOG
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! grep -q "$VERSION" CHANGELOG.md; then
+            echo "::error::Version $VERSION not found in CHANGELOG.md"
+            echo "Please add a CHANGELOG entry before releasing."
+            exit 1
+          fi
+          echo "✓ $VERSION found in CHANGELOG.md"
+
+      - name: Check version consistency
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Extract minor+patch from tag (e.g. v0.3.0 -> 0.3.0)
+          SHORT="${VERSION#v}"
+          echo "Checking version $SHORT across files..."
+          for f in SKILL.md AGENTS.md CHANGELOG.md; do
+            if [ -f "$f" ]; then
+              if grep -q "$SHORT" "$f"; then
+                echo "  ✓ $f contains version $SHORT"
+              else
+                echo "::warning::$f does not contain version $SHORT"
+              fi
+            fi
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          body: |
+            ## What's Changed
+
+            See CHANGELOG.md for details.
+
+            ## Version
+
+            ${{ steps.version.outputs.version }}
+
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'rc') || contains(steps.version.outputs.version, 'alpha') }}
