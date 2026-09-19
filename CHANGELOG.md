@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.6.1] - 2026-09-18
+
+### Added
+
+- **SKILL.md Contract 表**：新增输入/输出/失败行为/副作用/完成标准 5 项契约定义，集中声明 skill 的调用约定与完成判定条件。
+- **只读边界表述修正**：概述「不写任何内容」改为「不写业务输出文件（内部脚本会写本地中间数据文件，如 JSON 采集结果）」，与 Contract 表及通用约定第 3 条一致。
+
+### Fixed
+
+- **zhihu-cli 模块路径引用**：line 354/416/417 三处 `scripts/setup.sh` 等裸路径改为 `<skill-dir>/scripts/...` 占位形式，与 line 361/364 一致。修复前用户按文档字面执行会因路径不存在而失败。
+
+---
+
 ## [0.6.0] - 2026-09-18
 
 ### Added

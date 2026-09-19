@@ -25,7 +25,7 @@ news-report 是一个以**模块化信息源**驱动的新闻采集（news-gathe
 
 > **输出格式**：见下文「输出模板」章节（v0.3.0 正式定义）。Skill 执行时按该模板生成新闻简报；Agent 直接路径由 Agent 按模板排版，脚本路径由 `src/report.py` 自动排版。
 
-**边界**：news-report 当前**只读**——仅从各信息源检索数据，不创建或修改订阅源、不标记文章、不写任何内容（详见「通用约定」）。
+**边界**：news-report 当前**只读**——仅从各信息源检索数据，不创建或修改订阅源、不标记文章、不写业务输出文件（内部脚本会写本地中间数据文件，如 JSON 采集结果；详见「通用约定」第 3 条与 Contract 表）。
 
 ## 信息源模块化架构
 
@@ -66,6 +66,16 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 1. **密钥策略**：API key / token 一律存放在本地环境变量（shell profile、agent 运行时 env 或本地密钥管理器），示例统一用 `${VAR}` 占位，**绝不硬编码真实密钥**，也不得把密钥写入任何输出文件、配置样本或提交历史。配置文件中的 `env` 段引用本地环境变量（见模块 01 的 MCP 配置示例）。
 2. **终端示例约定**：凡需在终端执行的操作，均给出**可直接复制执行**的命令 / 脚本，并注明所需平台（Linux / macOS，或 Windows PowerShell）；平台差异处分别给出写法。
 3. **只读边界（当前版本）**：news-report 只做信息采集与检索，不修改任何信息源的数据（不创建 / 修改订阅、不标记已读 / 星标、不发布内容），也不生成业务输出文件。
+
+## Contract（输入 / 输出 / 失败行为 / 副作用）
+
+| 契约项 | 说明 |
+|--------|------|
+| 输入 | 用户自然语言指令；可选环境变量（详见各模块「前置条件」与「环境变量」小节） |
+| 输出 | 按「输出模板」章节（v0.3.0 正式定义）生成新闻简报 |
+| 失败行为 | 认证/凭据失败、网络/源不可用见各模块「排障」小节与「高级指南 → 故障排查进阶」 |
+| 副作用 | 当前版本**只读**：不创建/修改订阅、不标记已读/星标、不发布内容、不写业务输出文件（详见「通用约定」第 3 条） |
+| 完成标准 | 生成的新闻简报符合「输出模板」章节的完整结构与优先级判定；至少 1 个信息源模块返回非空数据；用户请求的信息源均可达时，简报覆盖全部请求源 |
 
 ---
 
@@ -341,7 +351,7 @@ news-report 的模块化架构遵循**单一职责**与**接口隔离**原则：
 
 #### 前置条件
 
-- zhihu-cli >= 0.6.0（由 Skill 的 `scripts/setup.sh` 或 `scripts/setup.ps1` 自动安装）
+- zhihu-cli >= 0.6.0（由知乎 Skill 的 `<skill-dir>/scripts/setup.sh` 或 `<skill-dir>/scripts/setup.ps1` 自动安装）
 - 知乎开放平台 Access Secret（[https://developer.zhihu.com/profile](https://developer.zhihu.com/profile) 登录生成）
 
 #### 安装与初始化
@@ -403,8 +413,8 @@ echo "YOUR_SECRET" | <binary_path> auth set --secret-stdin
 | 问题 | 原因 | 解决 |
 |------|------|------|
 | `AUTH_REQUIRED` | 未配置 Access Secret | 在 developer.zhihu.com/profile 生成并配置 |
-| `CLI not found` | 未安装 CLI | 运行 `scripts/setup.sh` 或 `setup.ps1` |
-| `incompatible` | CLI 版本过低 | 运行 `scripts/run.sh status` 检查，然后重新 setup |
+| `CLI not found` | 未安装 CLI | 运行 `<skill-dir>/scripts/setup.sh` 或 `<skill-dir>/scripts/setup.ps1` |
+| `incompatible` | CLI 版本过低 | 运行 `<skill-dir>/scripts/run.sh status` 检查，然后重新 setup |
 | `rate_limit` | 请求过于频繁 | 降低并发，增加延迟 |
 
 ### 模块 03：Twitter/X CLI
@@ -843,7 +853,8 @@ fetch feed from "https://example.com/feed.xml" with limit 10
 
 ## 版本信息
 
-- **Skill 版本**：v0.6.0 —— 新增模块 05 · xiaohongshu-cli（小红书 CLI），接入笔记搜索、热门榜（多分类）、推荐 Feed 与话题。
+- **Skill 版本**：v0.6.1 —— 新增 Contract 表（输入/输出/失败行为/副作用/完成标准）、修正只读边界表述、修复 zhihu-cli 模块路径引用。
+  - v0.6.0 —— 新增模块 05 · xiaohongshu-cli（小红书 CLI），接入笔记搜索、热门榜（多分类）、推荐 Feed 与话题。
   - v0.5.0 —— 新增模块 03 · twitter-cli（Twitter/X CLI）和模块 04 · bilibili-cli（Bilibili CLI），接入推文搜索、时间线、视频搜索、热门榜与排行榜。
   - v0.4.0 —— 新增模块 02 · zhihu-cli（知乎开放平台 CLI），接入知乎社区搜索、全网搜索、热榜、AI 直答。
   - v0.3.0 —— 正式定义输出模板（新增「输出模板」章节，含 TOP SIGNAL / 优先级分区 / 影响分析 / 完整示例）。
