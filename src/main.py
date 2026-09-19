@@ -15,24 +15,28 @@ Workflow:
 import argparse
 import json
 import sys
-import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 SKILL_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SKILL_DIR / "src"))
 
 # Load .env file before importing submodules (they read os.environ at import time)
-from env_loader import load_env
+from env_loader import load_env  # noqa: E402
+
 load_env()
 
 # Import submodules
-from collect_telegram import collect_telegram
-from collect_rss import collect_rss
-from collect_search import collect_search
-from evaluator import evaluate_items, Item
-from deduplicator import deduplicate
-from report import generate_report, save_report, load_curated_items
+from collect_bilibili import collect_bilibili  # noqa: E402
+from collect_rss import collect_rss  # noqa: E402
+from collect_search import collect_search  # noqa: E402
+from collect_telegram import collect_telegram  # noqa: E402
+from collect_twitter import collect_twitter  # noqa: E402
+from collect_xhs import collect_xhs  # noqa: E402
+from collect_zhihu import collect_zhihu  # noqa: E402
+from deduplicator import deduplicate  # noqa: E402
+from evaluator import evaluate_items  # noqa: E402
+from report import generate_report, load_curated_items, save_report  # noqa: E402
 
 
 def log(msg: str):
@@ -70,7 +74,9 @@ def step_collect():
 
     total = 0
 
-    tg_items = collect_telegram(tg_channels, limit_per_channel=config.get("telegram_limit_per_channel", 20))
+    tg_items = collect_telegram(
+        tg_channels, limit_per_channel=config.get("telegram_limit_per_channel", 20)
+    )
     log(f"TG collected: {len(tg_items)}")
     total += len(tg_items)
 
@@ -78,11 +84,44 @@ def step_collect():
     log(f"RSS collected: {len(rss_items)}")
     total += len(rss_items)
 
-    search_items = collect_search(keywords, limit_per_keyword=config.get("search_limit_per_keyword", 5))
+    search_items = collect_search(
+        keywords, limit_per_keyword=config.get("search_limit_per_keyword", 5)
+    )
     log(f"Search collected: {len(search_items)}")
     total += len(search_items)
 
-    all_items = tg_items + rss_items + search_items
+    # Zhihu CLI (module 02) — graceful skip when unauthenticated
+    zhihu_items = collect_zhihu(include_hot=config.get("zhihu_include_hot", True))
+    log(f"Zhihu collected: {len(zhihu_items)}")
+    total += len(zhihu_items)
+
+    # Twitter/X CLI (module 03) — graceful skip when unauthenticated
+    twitter_items = collect_twitter(include_feed=config.get("twitter_include_feed", True))
+    log(f"Twitter collected: {len(twitter_items)}")
+    total += len(twitter_items)
+
+    # Bilibili CLI (module 04) — graceful skip when unauthenticated
+    bilibili_items = collect_bilibili(include_hot=config.get("bilibili_include_hot", True))
+    log(f"Bilibili collected: {len(bilibili_items)}")
+    total += len(bilibili_items)
+
+    # Xiaohongshu CLI (module 05) — graceful skip when unauthenticated
+    xhs_items = collect_xhs(
+        include_hot=config.get("xhs_include_hot", True),
+        hot_categories=config.get("xhs_hot_categories", ["food", "fashion"]),
+    )
+    log(f"XHS collected: {len(xhs_items)}")
+    total += len(xhs_items)
+
+    all_items = (
+        tg_items
+        + rss_items
+        + search_items
+        + zhihu_items
+        + twitter_items
+        + bilibili_items
+        + xhs_items
+    )
     with open(items_file, "a", encoding="utf-8") as f:
         for item in all_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
@@ -107,7 +146,10 @@ def step_deduplicate():
     items_file = SKILL_DIR / "data" / "items.jsonl"
     with open(items_file, "w", encoding="utf-8") as f:
         for item in unique:
-            f.write(json.dumps(item.__dict__ if hasattr(item, '__dict__') else item, ensure_ascii=False) + "\n")
+            f.write(
+                json.dumps(item.__dict__ if hasattr(item, "__dict__") else item, ensure_ascii=False)
+                + "\n"
+            )
     return len(unique)
 
 
@@ -136,7 +178,7 @@ def run_full():
         log("Nothing survived evaluation")
         return
 
-    unique_count = run_step("deduplicate", step_deduplicate)
+    run_step("deduplicate", step_deduplicate)
 
     report = run_step("report", step_report)
     return report
@@ -147,8 +189,11 @@ def main():
     parser.add_argument("--collect-only", action="store_true", help="Run collection only")
     parser.add_argument("--evaluate-only", action="store_true", help="Run evaluation only")
     parser.add_argument("--full", action="store_true", help="Run full pipeline")
-    parser.add_argument("--skip-llm", action="store_true",
-                        help="Skip LLM filtering in evaluation (rule-only, fastest)")
+    parser.add_argument(
+        "--skip-llm",
+        action="store_true",
+        help="Skip LLM filtering in evaluation (rule-only, fastest)",
+    )
     args = parser.parse_args()
 
     if args.collect_only:

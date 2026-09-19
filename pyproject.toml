@@ -1,11 +1,43 @@
 # Copyright (c) 2026 CGArtLab. CC BY-NC-SA 4.0.
 
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "news-report"
-version = "0.2.1"
-description = "Modular news-gathering Agent Skill"
+version = "0.6.0"
+description = "Modular news-gathering Agent Skill — Python pipeline for RSS/search collection, LLM evaluation, and report generation"
 requires-python = ">=3.10"
-license = "CC-BY-NC-SA-4.0"
+license = { text = "CC BY-NC-SA 4.0" }
+authors = [{ name = "CGArtLab" }]
+readme = "README.md"
+keywords = ["news", "rss", "agent", "skill", "ai", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Creative Commons",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: RSS",
+    "Topic :: Utilities",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.8.0", "mypy>=1.10", "pre-commit>=3.8"]
+telegram = ["telethon>=1.36"]
+
+[project.scripts]
+news-report = "src.main:main"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.setuptools.package-data]
+src = ["*.json"]
 
 [tool.ruff]
 target-version = "py310"
