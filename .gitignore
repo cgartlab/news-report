@@ -9,3 +9,11 @@ __pycache__/
 output/
 data/
 .deploy/
+
+# Downloaded third-party skill packages (installed via skill setup scripts)
+.skills/
+
+# Python build artifacts
+*.egg-info/
+build/
+dist/
