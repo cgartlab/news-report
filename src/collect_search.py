@@ -6,16 +6,17 @@ with no API key required and no rate limits.
 """
 
 import json
-import sys
 import os
 import re
-import urllib.request
+import sys
 import urllib.error
 import urllib.parse
-from pathlib import Path
+import urllib.request
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from env_loader import load_env
+
 load_env()
 
 SKILL_DIR = Path(__file__).parent.parent
@@ -69,13 +70,7 @@ def collect_search(keywords: list[dict], limit_per_keyword: int = 5) -> list[dic
 
         query = urllib.parse.quote(keyword)
         # Use default engines (no specific engine restriction)
-        search_url = (
-            f"{SEARXNG_BASE}/search"
-            f"?q={query}"
-            f"&format=json"
-            f"&category=general"
-            f"&safesearch=0"
-        )
+        search_url = f"{SEARXNG_BASE}/search?q={query}&format=json&category=general&safesearch=0"
 
         try:
             req = urllib.request.Request(search_url, headers={"User-Agent": "Mozilla/5.0"})
@@ -108,16 +103,18 @@ def collect_search(keywords: list[dict], limit_per_keyword: int = 5) -> list[dic
 
                 date_parsed = _parse_searxng_date(date_str) if date_str else ""
 
-                items.append({
-                    "id": f"search_{abs(hash(result_url)) % 10**12}",
-                    "title": title,
-                    "url": result_url,
-                    "summary": snippet,
-                    "source": keyword,
-                    "source_type": "search",
-                    "tags": tags,
-                    "date": date_parsed,
-                })
+                items.append(
+                    {
+                        "id": f"search_{abs(hash(result_url)) % 10**12}",
+                        "title": title,
+                        "url": result_url,
+                        "summary": snippet,
+                        "source": keyword,
+                        "source_type": "search",
+                        "tags": tags,
+                        "date": date_parsed,
+                    }
+                )
                 count += 1
 
             print(f"[Search] '{keyword}': {count} results")

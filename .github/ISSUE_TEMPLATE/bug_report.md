@@ -14,13 +14,13 @@ What did you expect?
 
 ## Steps to reproduce
 
-1. 
-2. 
+1.
+2.
 
 ## Environment
 
-- OS: 
-- Python version: 
+- OS:
+- Python version:
 - Module affected (e.g. miniflux, rss-http, news-api):
 
 ## Additional context

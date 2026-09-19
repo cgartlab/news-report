@@ -5,12 +5,13 @@ Reuses the existing telegram-history session and credentials.
 """
 
 import json
-import sys
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from env_loader import load_env
+
 load_env()
 
 SKILL_DIR = Path(__file__).parent.parent
@@ -37,13 +38,16 @@ def collect_telegram(channels: list[dict], limit_per_channel: int = 20) -> list[
     Fetch recent messages from multiple Telegram channels.
     Returns a list of dicts with keys: title, url, summary, source, tags, date.
     """
-    items = []
+    items: list[dict[str, str]] = []
 
     script_path = Path(TG_HISTORY_SCRIPT)
     if not script_path.exists():
-        print(f"[TG] telegram-history script not found at {TG_HISTORY_SCRIPT} — "
-              f"skip Telegram collection. Set TG_HISTORY_SCRIPT env var or "
-              f"config.telegram_script_path to enable.", file=sys.stderr)
+        print(
+            f"[TG] telegram-history script not found at {TG_HISTORY_SCRIPT} — "
+            f"skip Telegram collection. Set TG_HISTORY_SCRIPT env var or "
+            f"config.telegram_script_path to enable.",
+            file=sys.stderr,
+        )
         return items
 
     for ch in channels:
@@ -58,8 +62,11 @@ def collect_telegram(channels: list[dict], limit_per_channel: int = 20) -> list[
 
         # Skip placeholder values like {CHANNEL_ID}
         if chat_id.startswith("{") and chat_id.endswith("}"):
-            print(f"[TG] Skipping {name}: placeholder chat_id '{chat_id}' — "
-                  f"replace with real chat_id in config", file=sys.stderr)
+            print(
+                f"[TG] Skipping {name}: placeholder chat_id '{chat_id}' — "
+                f"replace with real chat_id in config",
+                file=sys.stderr,
+            )
             continue
 
         try:
@@ -101,8 +108,9 @@ def collect_telegram(channels: list[dict], limit_per_channel: int = 20) -> list[
 
                 # Extract title: first non-empty line, stripped of markdown bold
                 import re
+
                 raw_lines = text.splitlines()
-                first_line = next((l.strip() for l in raw_lines if l.strip()), "")
+                first_line = next((line.strip() for line in raw_lines if line.strip()), "")
                 display_title = re.sub(r"\*\*(.+?)\*\*", r"\1", first_line)
                 # Truncate at word boundary near 80 chars
                 if len(display_title) > 80:
@@ -143,7 +151,9 @@ if __name__ == "__main__":
     channels = json.loads(channels_file.read_text())
     config = json.loads(config_file.read_text())
 
-    items = collect_telegram(channels, limit_per_channel=config.get("telegram_limit_per_channel", 20))
+    items = collect_telegram(
+        channels, limit_per_channel=config.get("telegram_limit_per_channel", 20)
+    )
 
     out_file = SKILL_DIR / "data" / "items.jsonl"
     with open(out_file, "a", encoding="utf-8") as f:

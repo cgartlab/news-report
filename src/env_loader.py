@@ -61,9 +61,8 @@ def load_env(env_file: str | Path | None = None) -> None:
             continue
 
         # Strip optional surrounding quotes
-        if len(value) >= 2:
-            if (value[0] == value[-1]) and value[0] in ('"', "'"):
-                value = value[1:-1]
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
 
         # Don't override existing environment variables
         if key not in os.environ:

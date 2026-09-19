@@ -12,33 +12,12 @@ This script is kept as an offline/batch fallback for the script pipeline.
 import json
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 
 # Reuse the shared Item dataclass from evaluator
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-try:
-    from evaluator import Item
-except ImportError:
-    from dataclasses import dataclass
-
-    @dataclass
-    class Item:
-        id: str = ""
-        title: str = ""
-        url: str = ""
-        summary: str = ""
-        source: str = ""
-        source_type: str = ""
-        tags: list = None
-        date: str = ""
-        verdict: str = ""
-        verdict_reason: str = ""
-        raw_text: str = ""
-
-        def __post_init__(self):
-            if self.tags is None:
-                self.tags = []
+from evaluator import Item  # noqa: E402
 
 SKILL_DIR = Path(__file__).parent.parent
 
@@ -47,21 +26,56 @@ SKILL_DIR = Path(__file__).parent.parent
 
 # Keywords that indicate breaking/urgent news (P0)
 URGENT_KW = {
-    "突发", "紧急", "紧急通知", "重大", "重大突破", "紧急修复",
-    "breaking", "urgent", "emergency", "critical",
+    "突发",
+    "紧急",
+    "紧急通知",
+    "重大",
+    "重大突破",
+    "紧急修复",
+    "breaking",
+    "urgent",
+    "emergency",
+    "critical",
 }
 
 # Keywords that indicate high-value content (P1)
 HIGH_VALUE_KW = {
-    "独家", "首发", "开源", "API", "新功能", "发布", "评测",
-    "对比", "教程", "工作流", "工具链", "深入", "分析", "研究",
+    "独家",
+    "首发",
+    "开源",
+    "API",
+    "新功能",
+    "发布",
+    "评测",
+    "对比",
+    "教程",
+    "工作流",
+    "工具链",
+    "深入",
+    "分析",
+    "研究",
 }
 
 # Investment keywords (P1 if investment-related)
 INVEST_KW = {
-    "投资", "黄金", "基金", "市场", "金融", "经济", "价格", "ETF",
-    "纳斯达克", "美股", "A股", "港股", "收益", "定投", "理财",
-    "净值", "估值", "分红",
+    "投资",
+    "黄金",
+    "基金",
+    "市场",
+    "金融",
+    "经济",
+    "价格",
+    "ETF",
+    "纳斯达克",
+    "美股",
+    "A股",
+    "港股",
+    "收益",
+    "定投",
+    "理财",
+    "净值",
+    "估值",
+    "分红",
 }
 
 
@@ -99,6 +113,7 @@ def assign_priority(item: Item) -> str:
 
 # ─── Item Loading ────────────────────────────────────────────────────────────
 
+
 def load_curated_items() -> list[Item]:
     """Load items with keep / keep_for_reader / dispute verdicts."""
     fpath = SKILL_DIR / "data" / "items.jsonl"
@@ -115,11 +130,24 @@ def load_curated_items() -> list[Item]:
                 d = json.loads(line)
                 if d.get("verdict") not in ("keep", "keep_for_reader", "dispute"):
                     continue
-                item_kwargs = {k: v for k, v in d.items() if k in (
-                    "id", "title", "url", "summary", "source", "source_type",
-                    "tags", "date", "verdict", "verdict_reason",
-                    "raw_text"
-                )}
+                item_kwargs = {
+                    k: v
+                    for k, v in d.items()
+                    if k
+                    in (
+                        "id",
+                        "title",
+                        "url",
+                        "summary",
+                        "source",
+                        "source_type",
+                        "tags",
+                        "date",
+                        "verdict",
+                        "verdict_reason",
+                        "raw_text",
+                    )
+                }
                 items.append(Item(**item_kwargs))
             except Exception:
                 pass
@@ -128,17 +156,18 @@ def load_curated_items() -> list[Item]:
 
 # ─── Item Rendering ──────────────────────────────────────────────────────────
 
+
 def render_title(item: Item) -> str:
     """Clean and render an item title."""
     title_raw = item.title.strip()
     first_line = title_raw.splitlines()[0].strip()
     display_title = first_line
     # Remove [text](url) → text
-    display_title = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', display_title)
+    display_title = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", display_title)
     # Remove leftover **bold**
-    display_title = re.sub(r'\*\*(.+?)\*\*', r'\1', display_title)
+    display_title = re.sub(r"\*\*(.+?)\*\*", r"\1", display_title)
     # Remove extra `markdown` backticks
-    display_title = re.sub(r'`(.+?)`', r'\1', display_title)
+    display_title = re.sub(r"`(.+?)`", r"\1", display_title)
     # Limit to 100 chars for readability
     if len(display_title) > 100:
         cut = display_title[:100].rfind(" ")
@@ -153,10 +182,7 @@ def render_item_p1_p0(item: Item) -> str:
     source_label = f"📡 {item.source}"
 
     # Inline link in title
-    if url:
-        link_title = f"[{title}]({url})"
-    else:
-        link_title = title
+    link_title = f"[{title}]({url})" if url else title
 
     # Summary (≤200 chars for group chat)
     summary = item.summary[:200].strip() if item.summary else ""
@@ -176,10 +202,7 @@ def render_item_p2(item: Item) -> str:
     date_str = item.date[:10] if item.date else ""
     source_label = f"📡 {item.source}"
 
-    if url:
-        link_title = f"[{title}]({url})"
-    else:
-        link_title = title
+    link_title = f"[{title}]({url})" if url else title
 
     meta_parts = []
     if date_str:
@@ -208,7 +231,6 @@ def generate_report(items: list[Item]) -> str:
     gmt8 = timezone(timedelta(hours=8))
     now = datetime.now(gmt8)
     date_str = now.strftime("%Y-%m-%d")
-    time_str = now.strftime("%Y-%m-%d %H:%M")
 
     # Source counts
     tg_count = sum(1 for it in items if it.source_type == "telegram")
@@ -239,10 +261,14 @@ def generate_report(items: list[Item]) -> str:
     lines.append(DIVIDER)
     lines.append(f"📰 NEWS REPORT · {date_str} {now.strftime('%H:%M')} GMT+8")
     lines.append(DIVIDER)
-    lines.append(f"📡 信源：RSS×{rss_count} / TG×{tg_count} / Web×{search_count}"
-                 + (f" / 其他×{other_count}" if other_count else "")
-                 + f" → 精选 {len(items)} 条")
-    lines.append(f"🔴 {len(p0_items)} / 🟡 {len(p1_items)} / 🟢 {len(p2_items)} / 🔵 {len(p3_items)}")
+    lines.append(
+        f"📡 信源：RSS×{rss_count} / TG×{tg_count} / Web×{search_count}"
+        + (f" / 其他×{other_count}" if other_count else "")
+        + f" → 精选 {len(items)} 条"
+    )
+    lines.append(
+        f"🔴 {len(p0_items)} / 🟡 {len(p1_items)} / 🟢 {len(p2_items)} / 🔵 {len(p3_items)}"
+    )
     lines.append(DIVIDER)
     lines.append("")
 
@@ -283,9 +309,10 @@ def generate_report(items: list[Item]) -> str:
     # ── Footer: source statistics ──
     lines.append(DIVIDER)
     lines.append("📊 来源统计")
-    lines.append(f"| 来源 | 条数 |")
-    lines.append(f"|------|------|")
+    lines.append("| 来源 | 条数 |")
+    lines.append("|------|------|")
     from collections import Counter
+
     source_counts = Counter(it.source for it in items)
     for source_name, count in sorted(source_counts.items(), key=lambda x: (-x[1], x[0])):
         lines.append(f"| {source_name} | {count} |")
