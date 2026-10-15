@@ -105,7 +105,9 @@ def step_collect():
 
     # RSS (default enabled)
     if _enabled("rss"):
-        rss_items = collect_rss(rss_sources, limit_per_source=config.get("rss_limit_per_source", 10))
+        rss_items = collect_rss(
+            rss_sources, limit_per_source=config.get("rss_limit_per_source", 10)
+        )
         log(f"RSS collected: {len(rss_items)}")
         total += len(rss_items)
     else:
