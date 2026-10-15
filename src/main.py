@@ -68,7 +68,7 @@ def step_collect():
     reasons = config.get("disabled_reasons", {})
 
     def _enabled(name: str, default: bool = True) -> bool:
-        return enabled.get(name, default)
+        return bool(enabled.get(name, default))
 
     def _skip(name: str):
         reason = reasons.get(name, "")

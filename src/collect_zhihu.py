@@ -127,7 +127,8 @@ def run_cli(cli_path: str, args: list[str], timeout: int = 30) -> dict | None:
             if brace_end == -1:
                 return None
             try:
-                return json.loads(output[: brace_end + 1])
+                fallback: dict = json.loads(output[: brace_end + 1])
+                return fallback
             except json.JSONDecodeError:
                 return None
     except subprocess.TimeoutExpired:
@@ -247,6 +248,8 @@ def collect_search_zhihu(cli_path: str, query: str, count: int = 10) -> list[dic
         cli_path,
         ["search", query, "--scope", "zhihu", "--count", str(count), "--format", "json"],
     )
+    if data is None:
+        return []
     return _items_from_response(data, scope="zhihu")
 
 
@@ -257,6 +260,8 @@ def collect_search_web(cli_path: str, query: str, count: int = 10) -> list[dict]
         cli_path,
         ["search", query, "--scope", "web", "--count", str(count), "--format", "json"],
     )
+    if data is None:
+        return []
     return _items_from_response(data, scope="web")
 
 
@@ -272,6 +277,8 @@ def collect_hot(cli_path: str, limit: int = 20) -> list[dict]:
     """Get Zhihu trending list (max 30)."""
     limit = max(1, min(limit, 30))
     data = run_cli(cli_path, ["trending", "--limit", str(limit), "--format", "json"])
+    if data is None:
+        return []
     items = _items_from_response(data, scope="trending")
     # Prefix titles for clarity in downstream evaluation.
     for it in items:
