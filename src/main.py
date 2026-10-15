@@ -55,9 +55,27 @@ def run_step(name: str, fn, *args, **kwargs):
 
 
 def step_collect():
-    """Collect from all sources, append to items.jsonl."""
+    """Collect from all enabled sources, append to items.jsonl.
+
+    Sources can be individually toggled in config/config.json under
+    `enabled_sources` (default: all on for backward compat). Disabled
+    sources are skipped entirely and their reason (if any) is logged.
+    """
     config_file = SKILL_DIR / "config" / "config.json"
     config = json.loads(config_file.read_text())
+
+    enabled = config.get("enabled_sources", {})
+    reasons = config.get("disabled_reasons", {})
+
+    def _enabled(name: str, default: bool = True) -> bool:
+        return enabled.get(name, default)
+
+    def _skip(name: str):
+        reason = reasons.get(name, "")
+        if reason:
+            log(f"SKIP {name}: {reason}")
+        else:
+            log(f"SKIP {name}")
 
     # Clear previous raw data
     items_file = SKILL_DIR / "data" / "items.jsonl"
@@ -74,44 +92,75 @@ def step_collect():
 
     total = 0
 
-    tg_items = collect_telegram(
-        tg_channels, limit_per_channel=config.get("telegram_limit_per_channel", 20)
-    )
-    log(f"TG collected: {len(tg_items)}")
-    total += len(tg_items)
+    # Telegram (disabled by default — needs TG_HISTORY_SCRIPT)
+    if _enabled("telegram"):
+        tg_items = collect_telegram(
+            tg_channels, limit_per_channel=config.get("telegram_limit_per_channel", 20)
+        )
+        log(f"TG collected: {len(tg_items)}")
+        total += len(tg_items)
+    else:
+        _skip("telegram")
+        tg_items = []
 
-    rss_items = collect_rss(rss_sources, limit_per_source=config.get("rss_limit_per_source", 10))
-    log(f"RSS collected: {len(rss_items)}")
-    total += len(rss_items)
+    # RSS (default enabled)
+    if _enabled("rss"):
+        rss_items = collect_rss(rss_sources, limit_per_source=config.get("rss_limit_per_source", 10))
+        log(f"RSS collected: {len(rss_items)}")
+        total += len(rss_items)
+    else:
+        _skip("rss")
+        rss_items = []
 
-    search_items = collect_search(
-        keywords, limit_per_keyword=config.get("search_limit_per_keyword", 5)
-    )
-    log(f"Search collected: {len(search_items)}")
-    total += len(search_items)
+    # Search (disabled by default — SearXNG 8099 not running; use MCP instead)
+    if _enabled("search"):
+        search_items = collect_search(
+            keywords, limit_per_keyword=config.get("search_limit_per_keyword", 5)
+        )
+        log(f"Search collected: {len(search_items)}")
+        total += len(search_items)
+    else:
+        _skip("search")
+        search_items = []
 
     # Zhihu CLI (module 02) — graceful skip when unauthenticated
-    zhihu_items = collect_zhihu(include_hot=config.get("zhihu_include_hot", True))
-    log(f"Zhihu collected: {len(zhihu_items)}")
-    total += len(zhihu_items)
+    if _enabled("zhihu"):
+        zhihu_items = collect_zhihu(include_hot=config.get("zhihu_include_hot", True))
+        log(f"Zhihu collected: {len(zhihu_items)}")
+        total += len(zhihu_items)
+    else:
+        _skip("zhihu")
+        zhihu_items = []
 
-    # Twitter/X CLI (module 03) — graceful skip when unauthenticated
-    twitter_items = collect_twitter(include_feed=config.get("twitter_include_feed", True))
-    log(f"Twitter collected: {len(twitter_items)}")
-    total += len(twitter_items)
+    # Twitter/X CLI (module 03) — disabled by default (not authenticated)
+    if _enabled("twitter"):
+        twitter_items = collect_twitter(include_feed=config.get("twitter_include_feed", True))
+        log(f"Twitter collected: {len(twitter_items)}")
+        total += len(twitter_items)
+    else:
+        _skip("twitter")
+        twitter_items = []
 
-    # Bilibili CLI (module 04) — graceful skip when unauthenticated
-    bilibili_items = collect_bilibili(include_hot=config.get("bilibili_include_hot", True))
-    log(f"Bilibili collected: {len(bilibili_items)}")
-    total += len(bilibili_items)
+    # Bilibili CLI (module 04) — disabled by default (collector has a bug)
+    if _enabled("bilibili"):
+        bilibili_items = collect_bilibili(include_hot=config.get("bilibili_include_hot", True))
+        log(f"Bilibili collected: {len(bilibili_items)}")
+        total += len(bilibili_items)
+    else:
+        _skip("bilibili")
+        bilibili_items = []
 
-    # Xiaohongshu CLI (module 05) — graceful skip when unauthenticated
-    xhs_items = collect_xhs(
-        include_hot=config.get("xhs_include_hot", True),
-        hot_categories=config.get("xhs_hot_categories", ["food", "fashion"]),
-    )
-    log(f"XHS collected: {len(xhs_items)}")
-    total += len(xhs_items)
+    # Xiaohongshu CLI (module 05) — disabled by default (not authenticated)
+    if _enabled("xhs"):
+        xhs_items = collect_xhs(
+            include_hot=config.get("xhs_include_hot", True),
+            hot_categories=config.get("xhs_hot_categories", ["food", "fashion"]),
+        )
+        log(f"XHS collected: {len(xhs_items)}")
+        total += len(xhs_items)
+    else:
+        _skip("xhs")
+        xhs_items = []
 
     all_items = (
         tg_items

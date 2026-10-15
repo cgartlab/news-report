@@ -47,13 +47,22 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 
 | 模块 | 数据访问 | 可用检索能力 | 配置项（环境变量） | 状态 |
 |------|----------|--------------|--------------------|------|
-| 模块 01 · `miniflux`（Miniflux RSS，经 miniflux-mcp MCP） | MCP 服务器 | 分类 / 订阅源浏览、全文搜索、未读 / 星标、分页排序（详见下节） | `MINIFLUX_BASE_URL`、`MINIFLUX_TOKEN`、`MINIFLUX_USERNAME`、`MINIFLUX_PASSWORD` | ✅ 可用 |
-| 模块 02 · `zhihu-cli`（知乎开放平台 CLI） | CLI 二进制 | 知乎搜索、全网搜索、热榜、直答、问题推荐、回答摘要（详见下节） | `ZHIHU_CLI_PATH`、`ZHIHU_ACCESS_SECRET` | ✅ 可用（需鉴权） |
-| 模块 03 · `twitter-cli`（Twitter/X CLI） | CLI 二进制 | 推文搜索、时间线、书签、用户资料、话题标签（详见下节） | `TWITTER_CLI_PATH`、`TWITTER_AUTH_TOKEN`、`TWITTER_CT0` | ✅ 可用（需鉴权） |
-| 模块 04 · `bilibili-cli`（Bilibili CLI） | CLI 二进制 | 视频搜索、热门榜、排行榜、用户资料、动态（详见下节） | `BILIBILI_CLI_PATH` | ✅ 可用（部分需鉴权） |
-| 模块 05 · `xiaohongshu-cli`（小红书 CLI） | CLI 二进制 | 笔记搜索、热门榜、推荐 Feed、用户资料、话题（详见下节） | `XHS_CLI_PATH` | ✅ 可用（需鉴权） |
+| 模块 01 · `miniflux`（Miniflux RSS，经 miniflux-mcp MCP） | MCP 服务器 | 分类 / 订阅源浏览、全文搜索、未读 / 星标、分页排序（详见下节） | `MINIFLUX_BASE_URL`、`MINIFLUX_TOKEN`、`MINIFLUX_USERNAME`、`MINIFLUX_PASSWORD` | ✅ 可用（默认启用） |
+| 模块 02 · `zhihu-search`（知乎开放平台 CLI + MCP） | CLI / MCP | 知乎搜索（站内/全网）、AI 直答、热榜、问题推荐、回答摘要、知识库、PDF、PPT、OAuth（详见下节） | `ZHIHU_SEARCH_CLI_PATH`、`ZHIHU_ACCESS_SECRET` | ✅ 可用（默认启用） |
+| 模块 03 · `twitter-cli`（Twitter/X CLI） | CLI 二进制 | 推文搜索、时间线、书签、用户资料、话题标签（详见下节） | `TWITTER_CLI_PATH`、`TWITTER_AUTH_TOKEN`、`TWITTER_CT0` | ⏸️ 默认禁用（未认证） |
+| 模块 04 · `bilibili-cli`（Bilibili CLI） | CLI 二进制 | 视频搜索、热门榜、排行榜、用户资料、动态（详见下节） | `BILIBILI_CLI_PATH` | ⏸️ 默认禁用（收集脚本有 bug） |
+| 模块 05 · `xiaohongshu-cli`（小红书 CLI） | CLI 二进制 | 笔记搜索、热门榜、推荐 Feed、用户资料、话题（详见下节） | `XHS_CLI_PATH` | ⏸️ 默认禁用（未认证） |
 | 模块 06 · `rss-http`（直接抓取 RSS / Atom 源，示例占位） | HTTP | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
 | 模块 07 · `news-api`（NewsAPI / NewsData.io 等聚合 API，示例占位） | HTTP API | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
+
+> **默认启用的源**（`config/config.json` → `enabled_sources`）：`rss`、`zhihu`。其余源在默认配置中禁用，日志会打印跳过原因（`disabled_reasons`）。老板按需打开：填入 `.env` 里的凭证或修好对应 CLI，把 `enabled_sources.X = true` 即可。
+>
+> **默认关闭的源及原因**：
+> - `search`：本机 SearXNG 8099 未开，改用 MCP `mcp__cgartlab__searxng_mcp__searxng_web_search` 或起 Docker 实例
+> - `telegram`：`.env` 里 `TG_HISTORY_SCRIPT` 未配置
+> - `twitter`：`TWITTER_AUTH_TOKEN` / `TWITTER_CT0` 未设置（未认证）
+> - `bilibili`：`src/collect_bilibili.py` 在响应结构上崩溃（list vs dict 假设错误），待修
+> - `xhs`：`xhs login` 未执行（未认证）
 
 > 模块 06 / 07 **仅为架构示例占位**：当前不存在对应的工具、命令或脚本，检索能力与配置项一律待下阶段设计；本版不得向用户声称可调用它们，也不得在回复中伪造其工具名。
 
@@ -343,68 +352,79 @@ news-report 的模块化架构遵循**单一职责**与**接口隔离**原则：
 | 中文关键词搜索无结果 | Miniflux 全文搜索基于 PostgreSQL 默认配置，对中文分词支持有限 | 将关键词调整为短语、用 `category_id` / `feed_id` 限定范围，或先用英文标题词搜索再在结果中筛选 |
 | 服务器日志出现 `ECONNRESET` | 网络不稳定或 Miniflux 实例负载过高 | 检查网络连通性；如需增加超时，需修改 miniflux-mcp 源码 |
 
-### 模块 02：Zhihu CLI（知乎开放平台）
+### 模块 02：Zhihu Search（知乎开放平台 CLI + MCP）
 
-通过 [知乎开放平台 CLI](https://developer.zhihu.com/) 接入知乎社区搜索、全网搜索、热榜、AI 直答、问题推荐与回答摘要。CLI 由知乎官方维护，安装到用户目录，不修改 PATH，不需要管理员权限。
+通过 [zhihu-search](https://github.com/klarkxy/zhihu-search) 接入知乎开放平台，支持知乎社区搜索、全网搜索、AI 直答、热榜、问题推荐、回答摘要、知识库、PDF / PPT 生成、OAuth。CLI + MCP 双形态，Apache 2.0 开源。
 
-> 完整文档见 `.skills/zhihu-cli/zhihu/SKILL.md`（v0.7.1）。
+> **重要**：本项目已从旧的 `zhihu-cli`（PyPI 1.2.0，2020 年停止维护，Python 3.10+ 无法构建其锁死的 `lxml==4.3.4`）迁移到 `zhihu-search`（v2.x，2026 年维护中）。`src/collect_zhihu.py` 已重写为调用 `zhihu-search` 命令，旧 `ZHIHU_CLI_PATH` 环境变量仍被兼容识别（作为路径查找 fallback）。
+>
+> 完整文档：[zhihu-search README](https://github.com/klarkxy/zhihu-search)、[zhihu-search PyPI](https://pypi.org/project/zhihu-search/)。
 
 #### 前置条件
 
-- zhihu-cli >= 0.6.0（由知乎 Skill 的 `<skill-dir>/scripts/setup.sh` 或 `<skill-dir>/scripts/setup.ps1` 自动安装）
+- Python 3.10+ 和 [uv](https://docs.astral.sh/uv/)
 - 知乎开放平台 Access Secret（[https://developer.zhihu.com/profile](https://developer.zhihu.com/profile) 登录生成）
 
-#### 安装与初始化
+#### 安装
 
 ```bash
-# macOS / Linux
-bash <skill-dir>/scripts/setup.sh
+# 一行安装（推荐）
+uv tool install zhihu-search
 
-# Windows PowerShell
-powershell -ExecutionPolicy Bypass -File <skill-dir>\scripts\setup.ps1
+# 或使用 pipx
+pipx install zhihu-search
 ```
 
-安装后配置 Access Secret：
+安装后配置 Access Secret（二选一）：
 
 ```bash
-# 交互式（推荐）
-<binary_path> auth set
+# 方式 A：写入本地凭证文件（推荐）
+zhihu-search --save-token <YOUR_ACCESS_SECRET>
 
-# 管道输入（脚本化）
-echo "YOUR_SECRET" | <binary_path> auth set --secret-stdin
+# 方式 B：设置环境变量（.env 里）
+export ZHIHU_ACCESS_SECRET="<YOUR_ACCESS_SECRET>"
 ```
 
 验证：
 
 ```bash
-<binary_path> auth status --verify
+zhihu-search --check-token       # 检查凭证来源
+zhihu-search --probe             # 端到端验证（消耗 1 次 hot_list 额度）
 ```
 
 #### 环境变量
 
 | 变量 | 说明 |
 |------|------|
-| `ZHIHU_CLI_PATH` | CLI 二进制路径（自动检测时可不设） |
-| `ZHIHU_ACCESS_SECRET` | headless 模式的 Access Secret（替代 CLI auth） |
+| `ZHIHU_SEARCH_CLI_PATH` | zhihu-search 二进制路径（自动检测时可不设，canonical name） |
+| `ZHIHU_CLI_PATH` | 兼容旧环境变量的别名（自动查找时会尝试） |
+| `ZHIHU_ACCESS_SECRET` | Access Secret（也可通过 `--save-token` 写入凭证文件） |
 
 #### 可用能力
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `search zhihu` | 搜索知乎社区内容（回答、文章、经验） | `<CLI> search zhihu --query "AI工具" --count 10` |
-| `search global` | 搜索全网来源（知乎之外） | `<CLI> search global --query "AI趋势" --count 10` |
-| `hot` | 获取知乎热榜 | `<CLI> hot --limit 20` |
-| `answer` | 调用知乎 AI 直答 | `<CLI> answer --query "问题"` |
-| `question recommend` | 发现待回答问题 | `<CLI> question recommend --count 5` |
-| `question answers` | 查看问题回答摘要 | `<CLI> question answers <url>` |
+| `search --scope zhihu` | 搜索知乎社区内容（回答、文章、经验），上限 10 条 | `<CLI> search "AI工具" --scope zhihu --count 10 --format json` |
+| `search --scope web` | 搜索全网来源（知乎之外），上限 20 条 | `<CLI> search "AI趋势" --scope web --count 10 --format json` |
+| `trending` | 获取知乎热榜，上限 30 条 | `<CLI> trending --limit 20 --format json` |
+| `ask` | 调用知乎 AI 直答 | `<CLI> ask "问题" --format json` |
+| `question-recommendations` | 发现待回答问题 | `<CLI> question-recommendations` |
+| `question-answers` | 查看问题回答摘要 | `<CLI> question-answers <url>` |
 | `quota` | 查看 API 剩余额度 | `<CLI> quota` |
+| `serve` | 启动 stdio MCP 服务器（默认行为） | `<CLI> serve --tools compact` |
+
+> **JSON 输出**：所有数据命令支持 `--format json` 或 `--format markdown`。`src/collect_zhihu.py` 统一使用 JSON 输出。
+>
+> **Search 输出结构**：`{"success": true, "kind": "search", "data": {"Items": [{Title, Url, AuthorName, ContentText, EditTime, VoteUpCount, CommentCount, ...}]}}`
+>
+> **Trending 输出结构**：`{"success": true, "kind": "trending", "data": {"Total": int, "Items": [{Title, Url, Summary, ThumbnailUrl}]}}`
 
 #### 在 news-report 中的使用
 
 脚本路径通过 `src/collect_zhihu.py` 集成，支持：
-- 知乎社区搜索（`search zhihu`）
-- 全网搜索（`search global`）
-- 热榜采集（`hot`）
+- 知乎社区搜索（`search --scope zhihu`）
+- 全网搜索（`search --scope web`）
+- 热榜采集（`trending`）
 
 无鉴权时优雅跳过，不影响其他采集模块。
 
@@ -412,10 +432,22 @@ echo "YOUR_SECRET" | <binary_path> auth set --secret-stdin
 
 | 问题 | 原因 | 解决 |
 |------|------|------|
-| `AUTH_REQUIRED` | 未配置 Access Secret | 在 developer.zhihu.com/profile 生成并配置 |
-| `CLI not found` | 未安装 CLI | 运行 `<skill-dir>/scripts/setup.sh` 或 `<skill-dir>/scripts/setup.ps1` |
-| `incompatible` | CLI 版本过低 | 运行 `<skill-dir>/scripts/run.sh status` 检查，然后重新 setup |
-| `rate_limit` | 请求过于频繁 | 降低并发，增加延迟 |
+| `Not authenticated` | 未配置 Access Secret | 在 developer.zhihu.com/profile 生成并配置（`zhihu-search --save-token`） |
+| `CLI not found` | 未安装 zhihu-search | 运行 `uv tool install zhihu-search` |
+| `AUTH_REQUIRED` / API 401 | Access Secret 失效 | 去 developer.zhihu.com 重新生成 |
+| `rate_limit` | 请求过于频繁 | 降低并发，增加延迟（脚本默认 `time.sleep(1)`） |
+| `unrecognized arguments` | 参数与旧版 zhihu-cli 不兼容 | 使用新版语法：`search <query> --scope zhihu|web --count N --format json` |
+
+#### 与旧版 zhihu-cli 的差异
+
+| 维度 | 旧 `zhihu-cli` (v1.2.0) | 新 `zhihu-search` (v2.x) |
+|------|------------------------|--------------------------|
+| 维护状态 | 2020 停止维护 | 2026 维护中 |
+| Python 支持 | 仅 ≤3.8（lxml 4.3.4 锁死） | 3.10+ |
+| 命令语法 | `zhihu-cli search zhihu --query "x"` | `zhihu-search search "x" --scope zhihu` |
+| 输出格式 | JSON（`--format` 参数无） | JSON / Markdown（`--format`） |
+| 认证 | `zhihu-cli auth set` | `zhihu-search --save-token` |
+| MCP 支持 | 无 | `zhihu-search serve`（stdio MCP） |
 
 ### 模块 03：Twitter/X CLI
 
@@ -643,9 +675,159 @@ fetch feed from "https://example.com/feed.xml" with limit 10
 
 > **注意**：以上内容仅为示例，**非当前实现**。实际开发时需基于 RSS 解析最佳实践（处理编码、`content:encoded` 提取、限速等）完成。
 
+## 每条新闻的元数据字段（强制，Agent 生成简报时必须完整标注）
+
+> **v0.7.0 新增。** 每一条进入简报的新闻必须带以下 5 个字段，用于让读者快速判断价值与真伪，同时支撑冷却去重与信源质量过滤。
+
+### 1. Significance（重要性 1-5）
+
+| 分数 | 含义 | 示例 |
+|---|---|---|
+| 5 | 颠覆性 / 行业变革 | GPT-6 正式发布、iPhone 新发布、Apple 收购、CEO 更换 |
+| 4 | 重要产品 / 功能发布，重大公司动作 | 新模型发布、大额融资、行业政策变化 |
+| 3 | 值得关注的次要新闻 | 一般产品迭代、中型公司动态 |
+| 2 | 常规资讯 | 版本更新、次要功能 |
+| 1 | 边缘信息（默认剔除） | 极冷僻条目 |
+
+**筛选规则**：Significance < 3 的新闻一律不进入简报（除非信源稀缺需要补充上下文）。
+
+### 2. Development Status（发展状态标签，10 种）
+
+- `🚀 已发布` —— 产品/功能已正式发布，用户可用
+- `📢 预告` —— 官方预告/宣布即将发布，但未发布
+- `🔧 进行中` —— 开发/测试/内测阶段
+- `✅ 已完成` —— 事件已落幕，是回顾/总结
+- `📋 讨论中` —— 社区/媒体正在讨论、无最终结论
+- `⚠️ 事故/危机` —— 服务中断、安全事故、负面事件
+- `📉 裁员/衰退` —— 公司裁员、业务收缩
+- `🤝 合作/收购` —— 合作、并购、结盟
+- `📈 融资/估值` —— 融资、上市、估值变化
+- `🏛️ 政策/监管` —— 监管、立法、政策变化
+
+### 3. Key Entities（关键实体，1-3 个）
+
+- **公司 / 组织**：Apple、OpenAI、Blender Foundation
+- **产品 / 服务**：GPT-6 Astra、Blender 5.2、OpenCode Go
+- **人物**：Tim Cook、Sam Altman（只提取直接相关的关键人物）
+
+格式：`[Apple] [iPhone Duo]`（用方括号包裹，加空格分隔）。
+
+### 4. Sentiment（情感倾向）
+
+- `[+]` 正面 · `[~]` 中性 · `[-]` 负面 · `[?]` 未知（信息不足，宁标 [?] 也不瞎猜）
+
+### 5. Data Quality（数据质量 1-10）
+
+| 分数 | 信源类型 | 示例 |
+|---|---|---|
+| 9-10 | 官方公告 / 一手权威媒体 | 官方博客、press release、Reuters/AP |
+| 7-8 | 二线权威媒体 / 专业分析 | 36Kr、The Verge、TechCrunch |
+| 5-6 | 一般新闻 / 社区讨论 | 少数派、知乎、个人博客 |
+| 3-4 | 聚合媒体 / 摘要 | 微信转载、AI 生成摘要 |
+| 1-2 | 内容农场 / 明显标题党 | 自动搬运、无实质内容 |
+
+**质量过滤规则**：Data Quality < 4 的新闻，除非是 🔴 紧急级独家信源，否则剔除。
+
+## 打分细则（Agent 生成简报时对照）
+
+### Significance 打分
+
+```
+5 = 全球行业头部公司 + 产品级发布；或首次开创性事件（首次 AI 大会）
+4 = 公司主要新产品/新功能；或十亿以上融资；或影响行业标准的政策
+3 = 产品迭代；中型公司动态；行业重要但不颠覆
+2 = 常规更新、版本发布、次要功能
+1 = 边缘信息，无实质内容
+```
+
+### Data Quality 打分
+
+| 信源类型 | 默认分 |
+|---|---|
+| 公司官方博客 / press release | 10 |
+| Reuters / AP / Bloomberg / 白宫 | 9 |
+| The Verge / TechCrunch / MIT Tech Review / 36Kr 深度报道 | 8 |
+| 爱范儿 / 少数派 / 虎嗅 / 知乎热榜 | 7 |
+| 一般新闻 / 个人博客 / Hacker News | 6 |
+| 微信转载 / AI 摘要 / 内容搬运 | 4 |
+| 明显内容农场 / 无源报道 | 2 |
+
+### Key Entities 提取优先级
+
+1. 主要公司/组织（第一个实体必须是主角）
+2. 相关产品/服务
+3. 直接相关人物（只取最关键的）
+
+最多 3 个，宁少不多。
+
+## 状态存储与冷却机制（跨简报去重）
+
+> **v0.7.0 新增。** 参考 news-aggregator 的 alert cooldown 和 news-pipeline-n8n 的事件签名机制。目的：同一事件在 24 小时内已推送，即使有新信源出现也不重复推送，避免早报刷屏。
+
+### 目录结构
+
+```
+~/.hermes/skills/news-report/
+├── SKILL.md                          # 本文件
+├── scripts/
+│   └── cooldown_check.py             # 冷却机制 CLI 工具
+└── state/
+    └── pushed_events.json            # 事件签名存储（运行时生成）
+```
+
+### pushed_events.json 格式
+
+```json
+{
+  "2026-10-06": {
+    "gpt-6-astra-launch": {
+      "event_name": "gpt-6-astra-launch",
+      "key_entity": "OpenAI",
+      "event_type": "launch",
+      "significance": 5,
+      "summary_hash": "sha1(标题前80字)",
+      "urls": ["https://openai.com/blog/..."],
+      "first_pushed": "2026-10-06T07:32:00+08:00",
+      "last_updated": "2026-10-06T07:32:00+08:00"
+    }
+  }
+}
+```
+
+### 冷却规则
+
+- 同一 `key_entity + event_type` 组合在 24 小时内已推，跳过
+- 24 小时后允许再次推送，但需有实质新进展（新数据/新功能/新公告），否则仍跳过
+- 每条日报最多保留 7 天历史，超过的日期自动清理（`cooldown_check.py prune`）
+
+### cooldown_check.py 用法
+
+```bash
+# 检查某事件是否在冷却期
+python3 scripts/cooldown_check.py check <key_entity> <event_type>
+
+# 推送记录（简报发出后调用）
+python3 scripts/cooldown_check.py push <event_name> <key_entity> <event_type> <significance> <summary_hash> <url1> [url2...]
+
+# 列出当日活跃签名（Agent 生成简报前必读）
+python3 scripts/cooldown_check.py list
+
+# 清理超过 7 天的历史
+python3 scripts/cooldown_check.py prune
+```
+
+### Agent 生成规则
+
+1. **生成前**：读 `state/pushed_events.json`，构造当日已推事件签名集合
+2. **筛选中**：候选事件与已推集合比对，24 小时内重复的一律跳过
+3. **生成后**：对每条实际推送的事件调用 `cooldown_check.py push` 记录签名
+4. **失败兜底**：如果 cooldown 脚本不可用，跳过冷却检查但记录 warning
+
 ## 输出模板
 
 > **v0.3.0 正式定义。** Agent 直接路径按本节模板排版；脚本路径由 `src/report.py` 自动生成。模板设计原则：**信息密度最大化、阅读体验最优化、节奏从冲击到沉静的叙事弧**。
+>
+> **⚠️ v0.7.0 补充说明**：本节模板是**代码路径的自动化排版模板**（TOP SIGNAL / 优先级分区 / 影响分析 / 示例），由 `src/report.py` 消费。Agent **对话直跑模式**（老板要求生成日报/早报时）应使用运行时 skill `~/.hermes/skills/news-report/SKILL.md` 里的【输出模板】章节，其中每条新闻必须带本文档前几节定义的 5 个元数据字段（Significance / Development Status / Key Entities / Sentiment / Data Quality），并在结尾调用 `scripts/cooldown_check.py push` 记录事件签名。两条路径产出内容不同：本节的 TOP SIGNAL + 影响分析 + 职业风险矩阵适合长版深度分析，运行时模板适合 Telegram 友好的日常简报。
 
 ### 设计原则
 

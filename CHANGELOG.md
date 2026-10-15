@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.1] - 2026-10-08
+
+### Changed
+
+- **模块 02 迁移：`zhihu-cli` → `zhihu-search`**：PyPI 上 `zhihu-cli` 停在 v1.2.0（2020），锁死 `lxml==4.3.4`，Python 3.10+ 编译失败已无法安装。本项目改用 [zhihu-search](https://github.com/klarkxy/zhihu-search) v2.x（2026 维护中，知乎开放平台官方平替），支持站内搜索 / 全网搜索 / AI 直答 / 热榜 / 问题推荐 / 回答摘要 / 知识库 / PDF / PPT / OAuth，并提供 MCP stdio 形态。
+  - `src/collect_zhihu.py` 已重写：调用 `zhihu-search search --scope zhihu|web`、`zhihu-search trending`、`zhihu-search --check-token`；解析新版 JSON 结构（`{"success", "kind", "data": {"Items": [...]}}`）
+  - 新增环境变量 `ZHIHU_SEARCH_CLI_PATH`（canonical）；保留 `ZHIHU_CLI_PATH` 作为兼容别名
+  - `.env.example` 同步更新 Zhihu 章节
+  - 安装方式：`uv tool install zhihu-search`（旧 `scripts/setup.sh` 已不适用）
+
+- **采集源按开关运行**：`config/config.json` 新增 `enabled_sources` 和 `disabled_reasons` 字段，`src/main.py` 的 `step_collect` 会按开关跳过未启用的源，并在日志中打印跳过原因。默认只启用 `rss` + `zhihu`，其余源（`search` / `telegram` / `twitter` / `bilibili` / `xhs`）默认禁用——要么凭证缺失，要么依赖未就绪。老板按需打开：填入 `.env` 里的凭证或修好对应 CLI，把 `enabled_sources.X = true` 即可。
+- **SKILL.md 模块状态列更新**：模块 03 / 04 / 05 状态从"✅ 可用（需鉴权）"改为"⏸️ 默认禁用"，附带默认关闭原因；模块 06 / 07 仍为占位。
+
+### Fixed
+
+- 修复 `src/collect_zhihu.py` 在 Python 3.10+ 环境下无法调用的问题（旧版依赖 `zhihu-cli auth set` 与 `zhihu-cli status`，两者在新版 CLI 中已不存在）
+- 修复 JSON 输出解析：`zhihu-search` 部分子命令会在 stdout 尾部追加 `===` 分隔符，新版解析器带容错 fallback
+- 修复 pipeline 崩溃：`collect_bilibili.py` 在响应结构上假设 dict 但实际返回 list 导致 `AttributeError`——现在通过禁用 bilibili 源避免，`enabled_sources.bilibili = true` 前需先修脚本
+
+---
+
+## [0.7.0] - 2026-10-07
+
+### Added
+
+- **元数据字段体系（5 字段强制标注）**：每一条进入简报的新闻必须带以下字段，用于让读者快速判断价值与真伪。参考 [news-pipeline-n8n](https://github.com/jeremylongshore/news-pipeline-n8n) 的 Significance + Status + Key Entities 与 [news-aggregator](https://github.com/tony-stark-eth/news-aggregator) 的 Data Quality + Sentiment。
+  - **Significance 1-5**：1=边缘信息 / 2=常规 / 3=值得关注的次要 / 4=重要产品或公司动作 / 5=颠覆性行业变革
+  - **Development Status 10 种**：🚀 已发布 · 📢 预告 · 🔧 进行中 · ✅ 已完成 · 📋 讨论中 · ⚠️ 事故/危机 · 📉 裁员/衰退 · 🤝 合作/收购 · 📈 融资/估值 · 🏛️ 政策/监管
+  - **Key Entities 1-3 个**：公司/产品/人物三类，格式 `[Apple] [iPhone Duo]`
+  - **Sentiment 4 值**：`[+]` 正面 · `[~]` 中性 · `[-]` 负面 · `[?]` 未知（宁标 [?] 也不瞎猜）
+  - **Data Quality 1-10**：按信源权威度 + 内容完整度打分，官方 9-10 / 二线媒体 7-8 / 社区 5-6 / 聚合 3-4 / 内容农场 1-2
+  - **硬门槛**：Significance < 3 或 Data Quality < 4 一律剔除（除 🔴 独家信源）
+
+- **打分细则章节**：Significance 5 档判定条件、Data Quality 按信源类型默认分表、Key Entities 提取优先级，让 Agent 生成简报时可直接对照，避免主观判断漂移。
+
+- **状态存储与冷却机制（跨简报去重）**：解决同一事件被多个信源报道导致早报刷屏的问题。参考 news-aggregator 的 alert cooldown 与 news-pipeline-n8n 的事件签名。
+  - `state/pushed_events.json`：按日期分片的事件签名存储
+  - `scripts/cooldown_check.py`：CLI 工具，4 个子命令（check / push / list / prune）
+  - **冷却规则**：同一 `key_entity + event_type` 24 小时内已推则跳过；24 小时后允许，但需有实质新进展；超过 7 天的日期自动清理
+  - **Agent 集成流程**：生成前读签名 → 筛选中比对 → 生成后 push 记录 → 失败兜底跳过冷却检查但记录 warning
+
+- **输出模板双路径说明**：v0.7.0 补充说明文档中的两个模板路径分工——
+  - **代码路径**：`src/report.py` 消费本 SKILL.md 的【输出模板】章节（TOP SIGNAL + 优先级分区 + 影响分析 + 职业风险矩阵），生成深度分析报告
+  - **对话直跑路径**：老板要求生成日报/早报时，Agent 使用运行时 skill `~/.hermes/skills/news-report/SKILL.md` 的【输出模板】（Telegram 友好的日常简报模板），每条新闻带 5 元数据字段并在结尾调用冷却脚本记录签名
+
+- **仓库新增目录**：
+  - `scripts/cooldown_check.py`：冷却机制 CLI（与 `~/.hermes/skills/news-report/scripts/` 同源）
+  - `state/.gitkeep`：状态目录占位，`pushed_events.json` 运行时生成
+
+### Fixed
+
+- 修复 v0.3.0 之后输出模板章节与运行时 Agent 简报模板的语义混淆：两者现在明确分工（长版深度分析 vs 日常简报），Agent 不会误用 TOP SIGNAL 长模板作为 Telegram 早报模板。
+
+### Breaking
+
+- 无。所有新增内容为纯增量。
+
+---
+
 ## [0.6.1] - 2026-09-18
 
 ### Added
