@@ -575,7 +575,7 @@ bili login
 
 通过 [xiaohongshu-cli](https://github.com/jackwener/xiaohongshu-cli) 接入小红书平台，支持笔记搜索、热门榜、推荐 Feed、用户资料与话题。Apache 2.0 开源，Python 实现。
 
-> 完整文档见 [SKILL.md](https://raw.githubusercontent.com/jackwener/xiaohongshu-cli/master/SKILL.md)。
+> 完整文档见 [SKILL.md](https://raw.githubusercontent.com/jackwener/xiaohongshu-cli/main/SKILL.md)。
 
 #### 前置条件
 
