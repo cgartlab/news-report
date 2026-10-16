@@ -7,6 +7,9 @@ description: >-
   material for a news briefing directly from conversation; trigger when the user
   asks to read RSS / check feeds / search articles / gather news-briefing material,
   or mentions "Miniflux", "RSS", "feeds", "订阅", "新闻", "简报".
+
+metadata:
+  kind: skill
 ---
 
 # news-report
