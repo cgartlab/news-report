@@ -87,6 +87,7 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 | 输出 | 按「输出模板」章节（v0.3.0 正式定义）生成新闻简报 |
 | 失败行为 | 认证/凭据失败、网络/源不可用见各模块「排障」小节与「高级指南 → 故障排查进阶」 |
 | 副作用 | 当前版本**只读**：不创建/修改订阅、不标记已读/星标、不发布内容、不写业务输出文件（详见「通用约定」第 3 条） |
+| 本地中间文件 | 采集脚本会将 JSON 数据写入本地文件（如 `src/main.py` → `items_file`）；最终报告由 Agent 排版，不写业务输出文件 |
 | 完成标准 | 生成的新闻简报符合「输出模板」章节的完整结构与优先级判定；至少 1 个信息源模块返回非空数据；用户请求的信息源均可达时，简报覆盖全部请求源 |
 
 ---
@@ -1053,5 +1054,5 @@ python3 scripts/cooldown_check.py prune
 ## 来源
 
 - **MCP Server（模块 01）**：[github.com/tan-yong-sheng/miniflux-mcp](https://github.com/tan-yong-sheng/miniflux-mcp) · [npm: miniflux-mcp](https://www.npmjs.com/package/miniflux-mcp)
-- **Miniflux API**：[docs.miniflux.app](https://docs.miniflux.app)
+- **Miniflux API**：[miniflux.app/docs](https://miniflux.app/docs/)
 - **License**: CC BY-NC-SA 4.0
