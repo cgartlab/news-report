@@ -32,6 +32,7 @@ from collect_rss import collect_rss  # noqa: E402
 from collect_search import collect_search  # noqa: E402
 from collect_telegram import collect_telegram  # noqa: E402
 from collect_twitter import collect_twitter  # noqa: E402
+from collect_x_browser import collect_x_browser  # noqa: E402
 from collect_xhs import collect_xhs  # noqa: E402
 from collect_zhihu import collect_zhihu  # noqa: E402
 from deduplicator import deduplicate  # noqa: E402
@@ -164,6 +165,18 @@ def step_collect():
         _skip("xhs")
         xhs_items = []
 
+    # X-Browser CDP (module 06) — disabled by default (needs Edge CDP running)
+    if _enabled("x_browser"):
+        xb_items = collect_x_browser(
+            timeline=config.get("x_browser_timeline", "following"),
+            scroll_rounds=config.get("x_browser_scroll_rounds", 12),
+        )
+        log(f"X-Browser collected: {len(xb_items)}")
+        total += len(xb_items)
+    else:
+        _skip("x_browser")
+        xb_items = []
+
     all_items = (
         tg_items
         + rss_items
@@ -172,6 +185,7 @@ def step_collect():
         + twitter_items
         + bilibili_items
         + xhs_items
+        + xb_items
     )
     with open(items_file, "a", encoding="utf-8") as f:
         for item in all_items:

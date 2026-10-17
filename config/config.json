@@ -8,7 +8,6 @@
   "output_topic": null,
   "output_format": "telegram_markdown",
   "telegram_script_path": "",
-
   "enabled_sources": {
     "rss": true,
     "zhihu": true,
@@ -16,16 +15,17 @@
     "telegram": false,
     "twitter": false,
     "bilibili": false,
-    "xhs": false
+    "xhs": false,
+    "x_browser": false
   },
   "disabled_reasons": {
     "search": "SearXNG 8099 not running on this host; use MCP searxng_web_search instead",
     "telegram": "TG_HISTORY_SCRIPT not configured (see .env)",
     "twitter": "TWITTER_AUTH_TOKEN not set (not authenticated)",
     "bilibili": "collect_bilibili.py crashes on list-vs-dict response shape",
-    "xhs": "XHS auth not configured"
+    "xhs": "XHS auth not configured",
+    "x_browser": "CDP Edge not running — start with bin/edge-cdp.ps1 or bin/edge-cdp.sh"
   },
-
   "zhihu_cli_path": "",
   "zhihu_include_hot": true,
   "twitter_cli_path": "",
@@ -34,5 +34,10 @@
   "bilibili_include_hot": true,
   "xhs_cli_path": "",
   "xhs_include_hot": true,
-  "xhs_hot_categories": ["food", "fashion"]
+  "xhs_hot_categories": [
+    "food",
+    "fashion"
+  ],
+  "x_browser_timeline": "following",
+  "x_browser_scroll_rounds": 12
 }

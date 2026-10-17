@@ -16,7 +16,7 @@ metadata:
 
 ## 概述
 
-news-report 是一个以**模块化信息源**驱动的新闻采集（news-gathering）Skill：每个信息源是一个独立模块，Skill 负责编排与检索。当前已可用模块为 **模块 01 · Miniflux RSS**（经 [miniflux-mcp](https://github.com/tan-yong-sheng/miniflux-mcp) MCP 服务器接入，完整保留原 miniflux-mcp-skill 的集成细节，见下文）；后续可扩展 RSS 直取（`rss-http`）、News API（`news-api`）等来源（规划中）。本 Skill 在 agent 中按名称 **`news-report`** 加载。
+news-report 是一个以**模块化信息源**驱动的新闻采集（news-gathering）Skill：每个信息源是一个独立模块，Skill 负责编排与检索。已登记模块见「信息源注册表」：模块 01 · Miniflux RSS（经 [miniflux-mcp](https://github.com/tan-yong-sheng/miniflux-mcp) MCP 服务器接入，完整保留原 miniflux-mcp-skill 的集成细节，见下文）、模块 02 · Zhihu Search、模块 03 · Twitter/X CLI、模块 04 · Bilibili CLI、模块 05 · Xiaohongshu CLI，以及模块 06 · X-Browser（Edge CDP）；RSS 直取（`rss-http`）、News API（`news-api`）等来源为规划中占位（模块 07 / 08）。本 Skill 在 agent 中按名称 **`news-report`** 加载。
 
 **核心能力**（当前由模块 01 提供，未来随模块扩展叠加）：
 
@@ -55,8 +55,9 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 | 模块 03 · `twitter-cli`（Twitter/X CLI） | CLI 二进制 | 推文搜索、时间线、书签、用户资料、话题标签（详见下节） | `TWITTER_CLI_PATH`、`TWITTER_AUTH_TOKEN`、`TWITTER_CT0` | ⏸️ 默认禁用（未认证） |
 | 模块 04 · `bilibili-cli`（Bilibili CLI） | CLI 二进制 | 视频搜索、热门榜、排行榜、用户资料、动态（详见下节） | `BILIBILI_CLI_PATH` | ⏸️ 默认禁用（收集脚本有 bug） |
 | 模块 05 · `xiaohongshu-cli`（小红书 CLI） | CLI 二进制 | 笔记搜索、热门榜、推荐 Feed、用户资料、话题（详见下节） | `XHS_CLI_PATH` | ⏸️ 默认禁用（未认证） |
-| 模块 06 · `rss-http`（直接抓取 RSS / Atom 源，示例占位） | HTTP | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
-| 模块 07 · `news-api`（NewsAPI / NewsData.io 等聚合 API，示例占位） | HTTP API | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
+| 模块 06 · `x-browser`（X 时间线 · Edge CDP） | CDP（HTTP + WebSocket） | 时间线深度采集（For You / Following / 自定义 Tab）、滚动、转帖归属、按推文 ID 去重（详见下节） | `X_BROWSER_CDP_ENDPOINT`、`X_BROWSER_TIMELINE` | ⏸️ 默认禁用（需先起 CDP 浏览器） |
+| 模块 07 · `rss-http`（直接抓取 RSS / Atom 源，示例占位） | HTTP | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
+| 模块 08 · `news-api`（NewsAPI / NewsData.io 等聚合 API，示例占位） | HTTP API | 待下阶段定义 | 待下阶段定义 | ⏳ 规划中 |
 
 > **默认启用的源**（`config/config.json` → `enabled_sources`）：`rss`、`zhihu`。其余源在默认配置中禁用，日志会打印跳过原因（`disabled_reasons`）。老板按需打开：填入 `.env` 里的凭证或修好对应 CLI，把 `enabled_sources.X = true` 即可。
 >
@@ -67,7 +68,7 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 > - `bilibili`：`src/collect_bilibili.py` 在响应结构上崩溃（list vs dict 假设错误），待修
 > - `xhs`：`xhs login` 未执行（未认证）
 
-> 模块 06 / 07 **仅为架构示例占位**：当前不存在对应的工具、命令或脚本，检索能力与配置项一律待下阶段设计；本版不得向用户声称可调用它们，也不得在回复中伪造其工具名。
+> 模块 07 / 08 **仅为架构示例占位**：当前不存在对应的工具、命令或脚本，检索能力与配置项一律待下阶段设计；本版不得向用户声称可调用它们，也不得在回复中伪造其工具名。
 
 ### 扩展方式
 
@@ -644,11 +645,74 @@ Cookie 有效期 7 天，过期后自动尝试从浏览器刷新。
 | `SessionExpiredError` | Cookie 过期 | 运行 `xhs login` 刷新 |
 | 请求较慢 | 内置高斯抖动延迟 | 正常现象，避免触发风控 |
 
+### 模块 06：X-Browser（Edge CDP）
+
+通过**已登录浏览器**的 Chrome DevTools Protocol（CDP）读取 X/Twitter 时间线，与模块 03（twitter-cli）互补：
+
+- 驱动真实浏览器会话，可**深度滚动**（一次采集数百条，不受 `--max` 限制）
+- 读取**转帖归属**（`socialContext`，如「Elon Musk 已转帖」）——twitter-cli JSON 里没有
+- 支持 For You / Following / 自定义 Timeline 标签切换，多轮合并去重
+
+Python 实现，**仅用标准库**（`src/x_cdp.py` 内含手写最小 WebSocket 客户端）。
+
+#### 前置条件
+
+- 以 `--remote-debugging-port` 启动的 Edge / Chrome，且该 profile **已登录 x.com**
+- Python >= 3.10（无第三方依赖）
+
+推荐用仓库自带启动器，它会自动带上本地代理与独立 profile（登录态持久保存在 profile 目录）：
+
+- Windows PowerShell：`powershell -File bin/edge-cdp.ps1`
+- Linux / macOS：`./bin/edge-cdp.sh`
+
+两脚本均幂等（已在监听端口则直接返回），支持 `-Port 9223` / `PROXY=... PORT=9223` 覆盖默认值，`-Stop` / `--stop` 停止实例。
+
+#### 环境变量
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `X_BROWSER_CDP_ENDPOINT` | `http://127.0.0.1:9222` | CDP 端点 |
+| `X_BROWSER_TIMELINE` | `following` | CLI 直跑时的时间线（`following` / `for_you` / `both`） |
+
+#### 可用能力
+
+| 命令 | 说明 |
+|------|------|
+| `python src/x_cdp.py list` | 列出当前打开的页面 target |
+| `python src/x_cdp.py eval "<js>" --match x.com` | 在 x.com 页面执行 JS 并打印结果 |
+| `python src/x_cdp.py nav <url> --match x.com` | 在指定页面导航 |
+| `python src/collect_x_browser.py` | 采集时间线并输出标准 item JSON（时间线由 `X_BROWSER_TIMELINE` 控制） |
+
+#### 在 news-report 中的使用
+
+脚本路径通过 `src/collect_x_browser.py` 集成，`config/config.json` 控制：
+
+- `enabled_sources.x_browser`：开关（默认 `false`，需先起 CDP 浏览器）
+- `x_browser_timeline`：`following` / `for_you` / `both`
+- `x_browser_scroll_rounds`：每轮滚动次数（默认 12）
+
+输出结构与模块 03 一致（`title` / `url` / `summary` / `source` / `source_type=twitter` / `tags` / `date` / `raw_text` / `engagement`），额外字段：
+
+- `retweeted_by`：转帖归属（`socialContext` 原文，如「Elon Musk 已转帖」）
+
+无 CDP 浏览器或未登录时优雅跳过，不影响其他采集模块。
+
+#### 排障
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| `[X-Browser] CDP unreachable` | 浏览器未启动或端口不对 | 运行 `bin/edge-cdp.ps1`（Windows）或 `bin/edge-cdp.sh`（Linux/macOS） |
+| 无 x.com 页面 | 浏览器没打开 x.com | 启动器默认打开 `https://x.com`；手动导航到 `https://x.com/home` |
+| 采集为空且未报错 | 该 profile 未登录 x.com | 在 CDP 浏览器窗口中登录一次（登录态保存在 profile 目录） |
+| 页面 JS 异常 | x.com DOM 改版 | 检查 `article[data-testid="tweet"]` 选择器是否仍匹配，必要时更新 `src/collect_x_browser.py` 的提取 JS |
+
+> **隐私提示**：本模块驱动的是你的真实浏览器会话；`edge-cdp.*` 启动器会新建独立 profile（默认 `%LOCALAPPDATA%\edge-cdp-profile` / `~/.local/share/edge-cdp-profile`），与日常浏览器 profile 隔离，x.com 登录态互不影响。
+
 ### 扩展模块示例（规划中模块参考）
 
 以下为规划中模块的**假设性**设计，用于展示模块章节应包含的内容结构：
 
-#### 模块 06 · `rss-http`（直接抓取 RSS/Atom 源）
+#### 模块 07 · `rss-http`（直接抓取 RSS/Atom 源）
 
 **前置条件**：
 - Node.js >= 18 或 Python >= 3.9（视实现语言而定）
@@ -665,7 +729,7 @@ Cookie 有效期 7 天，过期后自动尝试从浏览器刷新。
 - 抓取并解析指定 URL 的 RSS/Atom 源，返回标准化条目列表（参数示意，均为假设命名：`url`、`limit?`）。
 - 通过 HTML `<link>` 标签发现站点提供的 feed URL（参数示意，均为假设命名：`site_url`）。
 
-> **勿将上述参数名当作可用工具调用**：本示例仅展示未来模块章节的结构，模块 06 当前不存在任何工具。
+> **勿将上述参数名当作可用工具调用**：本示例仅展示未来模块章节的结构，模块 07 当前不存在任何工具。
 
 **常用工作流**（示意，非可执行）：
 ```
@@ -1039,7 +1103,9 @@ python3 scripts/cooldown_check.py prune
 
 ## 版本信息
 
-- **Skill 版本**：v0.6.1 —— 新增 Contract 表（输入/输出/失败行为/副作用/完成标准）、修正只读边界表述、修复 zhihu-cli 模块路径引用。
+- **Skill 版本**：v0.8.0 —— 新增模块 06 · x-browser（X 时间线 · Edge CDP）：零依赖 CDP 客户端（`src/x_cdp.py`）、时间线采集器（`src/collect_x_browser.py`）、跨平台启动器（`bin/edge-cdp.ps1` / `bin/edge-cdp.sh`）；规划中占位模块重编号为 07（`rss-http`）与 08（`news-api`）；并同步了版本信息口径（此前 SKILL.md 停留在 v0.6.1，而 CHANGELOG 已到 0.7.1）。
+  - v0.7.1 —— 修复失效链接 + Contract 表补「本地中间文件」行（CHANGELOG 已记录，SKILL.md 版本信息此前未同步）。
+  - v0.7.0 —— 元数据字段体系（5 字段强制标注）、打分细则、状态存储与冷却机制、输出模板双路径（CHANGELOG 已记录，SKILL.md 版本信息此前未同步）。
   - v0.6.0 —— 新增模块 05 · xiaohongshu-cli（小红书 CLI），接入笔记搜索、热门榜（多分类）、推荐 Feed 与话题。
   - v0.5.0 —— 新增模块 03 · twitter-cli（Twitter/X CLI）和模块 04 · bilibili-cli（Bilibili CLI），接入推文搜索、时间线、视频搜索、热门榜与排行榜。
   - v0.4.0 —— 新增模块 02 · zhihu-cli（知乎开放平台 CLI），接入知乎社区搜索、全网搜索、热榜、AI 直答。
