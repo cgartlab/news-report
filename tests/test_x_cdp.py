@@ -8,6 +8,7 @@
 
 这些测试不触网、不依赖浏览器。
 """
+
 import base64
 import contextlib
 import hashlib
@@ -49,8 +50,15 @@ def make_frame(payload: bytes, opcode: int = 0x1) -> bytes:
 class MiniWSServer:
     """Single-shot WebSocket server used to script exact byte sequences."""
 
-    def __init__(self, *, accept_override=None, coalesce=True, extra_frames=b"",
-                 bad_accept=False, status="101 Switching Protocols"):
+    def __init__(
+        self,
+        *,
+        accept_override=None,
+        coalesce=True,
+        extra_frames=b"",
+        bad_accept=False,
+        status="101 Switching Protocols",
+    ):
         self.accept_override = accept_override
         self.coalesce = coalesce
         self.extra_frames = extra_frames
@@ -120,9 +128,7 @@ class MiniWSServer:
             if self.accept_override is not None:
                 accept = self.accept_override
             else:
-                accept = base64.b64encode(
-                    hashlib.sha1((key + GUID).encode()).digest()
-                ).decode()
+                accept = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()
             if self.bad_accept:
                 accept = "wrong-accept-value"
 
@@ -153,9 +159,7 @@ class MiniWSServer:
 
 
 def cdp_response(msg_id: int, value: str) -> bytes:
-    return make_frame(
-        json.dumps({"id": msg_id, "result": {"result": {"value": value}}}).encode()
-    )
+    return make_frame(json.dumps({"id": msg_id, "result": {"result": {"value": value}}}).encode())
 
 
 # ── 缺陷 1: key 必须是合法 RFC 6455 key ────────────────────────────────────
@@ -163,9 +167,7 @@ def cdp_response(msg_id: int, value: str) -> bytes:
 
 def test_websocket_key_is_valid_rfc6455():
     """旧实现生成 18 字符非法 base64；RFC 6455 要求 16 字节 base64 → 24 字符。"""
-    with MiniWSServer(bad_accept=False, extra_frames=b"") as srv, CDPSession(
-        srv.url, timeout=2.0
-    ):
+    with MiniWSServer(bad_accept=False, extra_frames=b"") as srv, CDPSession(srv.url, timeout=2.0):
         pass
     key = srv.received_key
     assert key is not None
@@ -198,18 +200,20 @@ def test_frame_coalesced_with_handshake_is_not_lost():
 
     旧实现 recv(4096) 越过 header 边界后把那些字节丢弃，导致客户端永远等不到响应。
     """
-    with MiniWSServer(
-        coalesce=True, extra_frames=cdp_response(1, "delivered")
-    ) as srv, CDPSession(srv.url, timeout=3.0) as cdp:
+    with (
+        MiniWSServer(coalesce=True, extra_frames=cdp_response(1, "delivered")) as srv,
+        CDPSession(srv.url, timeout=3.0) as cdp,
+    ):
         result = cdp.send("Runtime.evaluate", {"expression": "1"})
     assert result["result"]["value"] == "delivered"
 
 
 def test_frame_arriving_after_handshake_still_works():
     """分离到达的 frame 也要正常工作（确保修复没有引入回归）。"""
-    with MiniWSServer(
-        coalesce=False, extra_frames=cdp_response(1, "separate")
-    ) as srv, CDPSession(srv.url, timeout=3.0) as cdp:
+    with (
+        MiniWSServer(coalesce=False, extra_frames=cdp_response(1, "separate")) as srv,
+        CDPSession(srv.url, timeout=3.0) as cdp,
+    ):
         result = cdp.send("Runtime.evaluate", {"expression": "1"})
     assert result["result"]["value"] == "separate"
 
@@ -220,10 +224,10 @@ def test_frame_arriving_after_handshake_still_works():
 def test_non_json_message_raises_instead_of_hanging():
     """非 JSON 消息应抛错，而不是在同一 buffer 上无限循环。"""
     garbage = make_frame(b"this is not json at all")
-    with MiniWSServer(
-        extra_frames=garbage
-    ) as srv, CDPSession(srv.url, timeout=1.0) as cdp, pytest.raises(
-        RuntimeError, match="non-JSON"
+    with (
+        MiniWSServer(extra_frames=garbage) as srv,
+        CDPSession(srv.url, timeout=1.0) as cdp,
+        pytest.raises(RuntimeError, match="non-JSON"),
     ):
         cdp.send("Runtime.evaluate", {"expression": "1"})
 
@@ -232,8 +236,9 @@ def test_non_json_message_raises_instead_of_hanging():
 
 
 def test_non_101_handshake_raises():
-    with MiniWSServer(status="403 Forbidden") as srv, pytest.raises(
-        ConnectionError, match="upgrade failed"
+    with (
+        MiniWSServer(status="403 Forbidden") as srv,
+        pytest.raises(ConnectionError, match="upgrade failed"),
     ):
         CDPSession(srv.url, timeout=2.0).connect()
 
@@ -243,9 +248,10 @@ def test_non_101_handshake_raises():
 
 def test_client_frames_are_masked():
     """RFC 6455 §5.3: 客户端发出的 frame 必须带 mask。"""
-    with MiniWSServer(
-        coalesce=True, extra_frames=cdp_response(1, "ok")
-    ) as srv, CDPSession(srv.url, timeout=3.0) as cdp:
+    with (
+        MiniWSServer(coalesce=True, extra_frames=cdp_response(1, "ok")) as srv,
+        CDPSession(srv.url, timeout=3.0) as cdp,
+    ):
         cdp.send("Runtime.evaluate", {"expression": "1"})
         time.sleep(0.2)
     assert srv.received_frames, "server did not receive a client frame"

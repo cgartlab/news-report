@@ -176,9 +176,7 @@ class CDPSession:
                 break
         if accept != expected:
             sock.close()
-            raise ConnectionError(
-                f"websocket handshake not accepted by server (accept={accept!r})"
-            )
+            raise ConnectionError(f"websocket handshake not accepted by server (accept={accept!r})")
 
         self._sock = sock
         # The upgrade response and the first frame can arrive in one TCP
@@ -246,9 +244,7 @@ class CDPSession:
             length = struct.unpack(">Q", _read_exact(self._sock, 8, self._buf))[0]
         if length > FRAME_MAX:
             raise ConnectionError(f"frame too large: {length}")
-        mask_key = (
-            _read_exact(self._sock, 4, self._buf) if b1 & 0x80 else None
-        )
+        mask_key = _read_exact(self._sock, 4, self._buf) if b1 & 0x80 else None
         payload = _read_exact(self._sock, length, self._buf)
         if mask_key:
             payload = bytes(b ^ mask_key[i % 4] for i, b in enumerate(payload))
@@ -278,9 +274,7 @@ class CDPSession:
                 except (json.JSONDecodeError, UnicodeDecodeError) as exc:
                     # A non-JSON message on the CDP socket is protocol garbage.
                     # Previously this looped forever on the same buffer.
-                    raise RuntimeError(
-                        f"non-JSON websocket message ({len(buf)} bytes)"
-                    ) from exc
+                    raise RuntimeError(f"non-JSON websocket message ({len(buf)} bytes)") from exc
                 if not isinstance(parsed, dict):
                     raise RuntimeError("CDP websocket message is not a JSON object")
                 return parsed
