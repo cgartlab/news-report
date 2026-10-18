@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.7.1] - 2026-10-08
+## [0.8.0] - 2026-10-17
+
+### Added
+
+- **模块 06 · `x-browser`（X 时间线 · Edge CDP）**：通过已登录浏览器的 Chrome DevTools Protocol 深度采集 X/Twitter 时间线，与模块 03（twitter-cli）互补——支持 For You / Following / 自定义 Timeline 标签、深度滚动（不受 `--max` 限制）、转帖归属（`retweeted_by` 字段）与按推文 ID 去重。
+  - `src/x_cdp.py`：零第三方依赖的 CDP 客户端（HTTP target 发现 + 手写最小 RFC 6455 WebSocket），支持 `Runtime.evaluate` / `Page.navigate` / `Input.dispatchMouseEvent`（滚动），可作 CLI 使用（`list` / `eval` / `nav`）
+  - `src/collect_x_browser.py`：时间线采集器，输出与其他模块一致的标准 item 结构；CDP 不可达或无 x.com 页面时优雅跳过
+  - `bin/edge-cdp.ps1` / `bin/edge-cdp.sh`：跨平台浏览器启动器（本地代理 + 独立 profile + CDP 端口），幂等且支持 `-Stop` / `--stop`
+  - 环境变量：`X_BROWSER_CDP_ENDPOINT`（默认 `http://127.0.0.1:9222`）、`X_BROWSER_TIMELINE`（`following` / `for_you` / `both`）；`config/config.json` 新增 `enabled_sources.x_browser`、`x_browser_timeline`、`x_browser_scroll_rounds`
+- **规划中占位模块重编号**：`rss-http` 06 → **07**，`news-api` 07 → **08**（注册表与「扩展模块示例」同步更新）
+- **版本信息口径同步**：SKILL.md 版本信息补记 v0.7.0 / v0.7.1（此前 CHANGELOG 已到 0.7.1 而 SKILL.md 停留在 v0.6.1）
+
+---
 
 ### Changed
 
