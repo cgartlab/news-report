@@ -1,17 +1,19 @@
 # Changelog
 
-All notable changes to **news-report** are documented in this file.
+本文件记录 news-report 的所有显著变更。
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/),
-and this project adheres to [Semantic Versioning](https://semver.org/).
+格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+版本号遵循 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/)。
 
 ---
 
-## [0.8.0] - 2026-10-17
+## [0.8.0] - 2026-10-17 _(无 tag)_
+
+> **一句话概括**：这是一次**新采集能力 + 默认行为变化**更新。新增 x-browser 模块——通过已登录的浏览器（Edge CDP）深度采集 X/Twitter 时间线；同时采集源改为按开关运行，默认只启用 `rss` + `zhihu`。**如需采集 X / 搜索 / Telegram / B 站 / 小红书，请把 `config/config.json` 的 `enabled_sources` 对应项设为 `true` 并配好凭证；zhihu 模块已从 `zhihu-cli` 迁移到 `zhihu-search`（安装方式改为 `uv tool install zhihu-search`）。**
 
 ### Added
 
-- **模块 06 · `x-browser`（X 时间线 · Edge CDP）**：通过已登录浏览器的 Chrome DevTools Protocol 深度采集 X/Twitter 时间线，与模块 03（twitter-cli）互补——支持 For You / Following / 自定义 Timeline 标签、深度滚动（不受 `--max` 限制）、转帖归属（`retweeted_by` 字段）与按推文 ID 去重。
+- **现在可以采集 X/Twitter 时间线了（新增模块 06 · `x-browser`，需先通过已登录浏览器的 Edge CDP 接入）**：与模块 03（twitter-cli）互补——支持 For You / Following / 自定义 Timeline 标签、深度滚动（不受 `--max` 限制）、转帖归属（`retweeted_by` 字段）与按推文 ID 去重。
   - `src/x_cdp.py`：零第三方依赖的 CDP 客户端（HTTP target 发现 + 手写最小 RFC 6455 WebSocket），支持 `Runtime.evaluate` / `Page.navigate` / `Input.dispatchMouseEvent`（滚动），可作 CLI 使用（`list` / `eval` / `nav`）
   - `src/collect_x_browser.py`：时间线采集器，输出与其他模块一致的标准 item 结构；CDP 不可达或无 x.com 页面时优雅跳过
   - `bin/edge-cdp.ps1` / `bin/edge-cdp.sh`：跨平台浏览器启动器（本地代理 + 独立 profile + CDP 端口），幂等且支持 `-Stop` / `--stop`
@@ -40,7 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.7.0] - 2026-10-07
+## [0.7.0] - 2026-10-07 _(无 tag)_
+
+> **一句话概括**：这是一次**简报质量与去重机制**更新。每条进入简报的新闻现在必须带 5 个元数据字段（Significance / Development Status / Key Entities / Sentiment / Data Quality），同一事件 24 小时内跨信源自动去重（冷却机制），输出模板明确了长版深度分析与日常简报的分工。**你不需要做任何事——本版为纯增量更新。**
 
 ### Added
 
@@ -78,7 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.6.1] - 2026-09-18
+## [0.6.1](https://github.com/cgartlab/news-report/compare/v0.6.0...v0.6.1) - 2026-09-18
+
+> **一句话概括**：这是一次**文档契约与可用性修正**。SKILL.md 新增输入/输出/失败行为/副作用/完成标准五项契约，并修复 zhihu-cli 模块的路径引用（此前按文档字面执行会失败）。**你不需要做任何事——纯文档修正。**
 
 ### Added
 
@@ -91,11 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.6.0] - 2026-09-18
+## [0.6.0](https://github.com/cgartlab/news-report/compare/v0.5.0...v0.6.0) - 2026-09-18
+
+> **一句话概括**：新增**小红书采集能力**（模块 05 · `xiaohongshu-cli`），支持笔记搜索、热门榜、推荐 Feed。**需要采集小红书请配置 `XHS_CLI_PATH`（或让 CLI 自动检测）；不需要该源则无需任何操作。**
 
 ### Added
 
-- **模块 05 · `xiaohongshu-cli`（小红书 CLI）**：新增小红书信息源模块，通过 [jackwener/xiaohongshu-cli](https://github.com/jackwener/xiaohongshu-cli) 接入笔记搜索、热门榜、推荐 Feed、用户资料与话题。Apache 2.0 开源。
+- **现在可以采集小红书内容了（新增模块 05 · `xiaohongshu-cli`，需配置 `XHS_CLI_PATH` 或登录）**：通过 [jackwener/xiaohongshu-cli](https://github.com/jackwener/xiaohongshu-cli) 接入笔记搜索、热门榜、推荐 Feed、用户资料与话题。Apache 2.0 开源。
   - `src/collect_xhs.py`：小红书 CLI 采集脚本，支持笔记搜索（`search`）、热门榜（`hot`，支持多分类：food/fashion/cosmetics/movie/career/love/home/gaming/travel/fitness）、推荐 Feed（`feed`），无鉴权时优雅跳过。
   - CLI 路径自动检测：`XHS_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
   - 集成到 `main.py` 的 `step_collect()`，作为第 7 个采集源。
@@ -111,15 +119,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.5.0] - 2026-09-18
+## [0.5.0](https://github.com/cgartlab/news-report/compare/v0.4.0...v0.5.0) - 2026-09-18
+
+> **一句话概括**：新增 **Twitter/X 与 B 站采集能力**（模块 03 · `twitter-cli`、模块 04 · `bilibili-cli`）。**采集 Twitter 请配置 `TWITTER_CLI_PATH` / `TWITTER_AUTH_TOKEN` / `TWITTER_CT0`，采集 B 站请配置 `BILIBILI_CLI_PATH`；不需要这些源则无需任何操作。**
 
 ### Added
 
-- **模块 03 · `twitter-cli`（Twitter/X CLI）**：新增 Twitter/X 信息源模块，通过 [jackwener/twitter-cli](https://github.com/jackwener/twitter-cli) 接入推文搜索、时间线、书签与用户资料。Apache 2.0 开源。
+- **现在可以采集 Twitter/X 内容了（新增模块 03 · `twitter-cli`，需配置 `TWITTER_CLI_PATH` 或登录）**：通过 [jackwener/twitter-cli](https://github.com/jackwener/twitter-cli) 接入推文搜索、时间线、书签与用户资料。Apache 2.0 开源。
   - `src/collect_twitter.py`：Twitter CLI 采集脚本，支持推文搜索（`search`）、时间线采集（`feed`），无鉴权时优雅跳过。
   - CLI 路径自动检测：`TWITTER_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
   - 集成到 `main.py` 的 `step_collect()`，作为第 5 个采集源。
-- **模块 04 · `bilibili-cli`（Bilibili CLI）**：新增 B 站信息源模块，通过 [jackwener/bilibili-cli](https://github.com/jackwener/bilibili-cli) 接入视频搜索、热门榜、排行榜与用户资料。Apache 2.0 开源。
+- **现在可以采集 B 站内容了（新增模块 04 · `bilibili-cli`，需配置 `BILIBILI_CLI_PATH`；部分命令无需鉴权）**：通过 [jackwener/bilibili-cli](https://github.com/jackwener/bilibili-cli) 接入视频搜索、热门榜、排行榜与用户资料。Apache 2.0 开源。
   - `src/collect_bilibili.py`：Bilibili CLI 采集脚本，支持视频搜索（`search`）、热门榜（`hot`）、排行榜（`rank`），部分命令无需鉴权。
   - CLI 路径自动检测：`BILIBILI_CLI_PATH` → `config.json` → 已知路径 → PATH 搜索。
   - 集成到 `main.py` 的 `step_collect()`，作为第 6 个采集源。
@@ -135,11 +145,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.4.0] - 2026-09-18
+## [0.4.0](https://github.com/cgartlab/news-report/compare/v0.3.0...v0.4.0) - 2026-09-18
+
+> **一句话概括**：新增**知乎采集能力**（模块 02 · `zhihu-cli` 知乎开放平台 CLI），支持社区/全网搜索与热榜。**需要采集知乎请配置 `ZHIHU_CLI_PATH` 与 `ZHIHU_ACCESS_SECRET`（或登录）；不需要该源则无需任何操作。**
 
 ### Added
 
-- **模块 02 · `zhihu-cli`（知乎开放平台 CLI）**：新增知乎信息源模块，通过知乎官方 CLI 接入社区搜索、全网搜索、热榜、AI 直答、问题推荐与回答摘要。
+- **现在可以采集知乎内容了（新增模块 02 · `zhihu-cli` 知乎开放平台 CLI，需配置 `ZHIHU_CLI_PATH` 或登录）**：通过知乎官方 CLI 接入社区搜索、全网搜索、热榜、AI 直答、问题推荐与回答摘要。
   - `src/collect_zhihu.py`：Zhihu CLI 采集脚本，支持知乎社区搜索（`search zhihu`）、全网搜索（`search global`）、热榜采集（`hot`），无鉴权时优雅跳过。
   - CLI 路径自动检测：`ZHIHU_CLI_PATH` 环境变量 → `config.json` → 已知路径 → PATH 搜索。
   - 集成到 `main.py` 的 `step_collect()`，作为第 4 个采集源（RSS + Search + Telegram + Zhihu）。
@@ -155,7 +167,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.3.0] - 2026-09-18
+## [0.3.0](https://github.com/cgartlab/news-report/compare/v0.2.0...v0.3.0) - 2026-09-18
+
+> **一句话概括**：简报**输出格式正式定义**——7 个结构化章节（TOP SIGNAL → 紧急 → 关注 → 常规 → 背景 → 影响分析 → 来源统计），含排版原则与跨行业影响分析指南。**你不需要做任何事——输出格式从「下一阶段设计」变为正式可用，生成简报时自动生效。**
 
 ### Added
 
@@ -171,7 +185,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.2.2] - 2026-09-18
+## [0.2.2] - 2026-09-18 _(无 tag)_
+
+> **一句话概括**：这是一次**工程治理升级**：补齐 GitHub Actions（lint / 自动发布 / 文档检查）、`pyproject.toml`、pre-commit hooks 与仓库治理文件（CODEOWNERS、PR/Issue 模板、CONTRIBUTING.md），README 专业化重写。**对使用者无行为变化，你不需要做任何事。**
 
 ### Added
 
@@ -189,7 +205,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.2.1] - 2026-09-11
+## [0.2.1] - 2026-09-11 _(无 tag)_
+
+> **一句话概括**：这是一次**文档修正与深化**：修复工具签名、`searchEntries` 参数表与状态过滤值的误导性描述，移除编造内容，并新增「高级指南」章节。**你不需要做任何事——纯文档更新。**
 
 ### Fixed
 
@@ -204,7 +222,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **完善模块化架构文档**：强化模块开发规范与最佳实践，为未来模块扩展提供清晰指引。
 - **AGENTS.md 文档升级**：v1 → v3——新增「启动清单」「典型任务与操作原则」「质量门禁」章节，强化版本三处同步约束，更新文件地图与版本段。
 
-## [0.2.0] - 2026-09-06
+## [0.2.0](https://github.com/cgartlab/news-report/compare/v0.1.0...v0.2.0) - 2026-09-06
+
+> **一句话概括**：这是一次**更名与重新定位**：`miniflux-mcp-skill` → **`news-report`**，从「把 Miniflux 接入 AI Agent」扩展为「模块化信息源驱动的新闻采集 Skill」。**如果你在用旧版，请改用 `news-report` 名称触发；Miniflux 模块的全部集成内容原样保留。**
 
 ### Changed
 
@@ -220,6 +240,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ---
 
 ## [0.1.0] - 2026-08-01
+
+> **一句话概括**：**首个版本**：将 Miniflux RSS 阅读器经 `miniflux-mcp` MCP 服务器接入 AI Agent（前置条件、配置方案 A/B、可用工具、`searchEntries` 参数表、常用工作流、排障）。**这是初始发布，按 SKILL.md 配置即可使用。**
 
 ### Added
 
