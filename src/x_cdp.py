@@ -26,6 +26,8 @@ Usage as a CLI::
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
 import os
 import socket
@@ -41,6 +43,8 @@ if TYPE_CHECKING:
 
 DEFAULT_BASE = "http://127.0.0.1:9222"
 FRAME_MAX = 4 * 1024 * 1024  # safety cap for a single WS payload
+# Fixed GUID from RFC 6455 §1.3, used to derive Sec-WebSocket-Accept.
+_WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 # ─── HTTP target discovery ────────────────────────────────────────────────
@@ -94,14 +98,19 @@ def pick_page(targets: Iterable[dict[str, Any]], match: str = "") -> dict[str, A
 # ─── Minimal RFC 6455 WebSocket ───────────────────────────────────────────
 
 
-def _read_exact(sock: socket.socket, n: int) -> bytes:
-    chunks = bytearray()
-    while len(chunks) < n:
-        part = sock.recv(n - len(chunks))
+def _read_exact(sock: socket.socket, n: int, buf: bytearray | None = None) -> bytes:
+    """Read exactly ``n`` bytes, consuming ``buf`` (leftover) before the socket."""
+    out = bytearray()
+    if buf:
+        take = min(n, len(buf))
+        out.extend(buf[:take])
+        del buf[:take]
+    while len(out) < n:
+        part = sock.recv(n - len(out))
         if not part:
             raise ConnectionError("websocket closed mid-frame")
-        chunks.extend(part)
-    return bytes(chunks)
+        out.extend(part)
+    return bytes(out)
 
 
 class CDPSession:
@@ -115,6 +124,7 @@ class CDPSession:
         self.ws_url = ws_url
         self.timeout = timeout
         self._sock: socket.socket | None = None
+        self._buf = bytearray()
         self._next_id = 1
 
     # ── connection lifecycle ────────────────────────────────────────────
@@ -133,29 +143,56 @@ class CDPSession:
         port = int(port_str or 80)
         sock = socket.create_connection((host, port), timeout=self.timeout)
         sock.settimeout(self.timeout)
-        # Sec-WebSocket-Key must be 16 bytes base64-encoded per RFC 6455;
-        # generate a 22-char base64-ish value directly to avoid an import.
-        _b64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-        key = "".join(_b64[b % 64] for b in os.urandom(16)) + "=="
+        # RFC 6455 §4.1: the key is 16 random bytes, base64-encoded → exactly
+        # 24 characters. Generating it by hand produced 18 chars of invalid
+        # base64, which strict servers reject.
+        nonce = base64.b64encode(os.urandom(16)).decode("ascii")
         path = "/" + "/".join(parts[3:])
         req = (
             f"GET {path} HTTP/1.1\r\n"
             f"Host: {host_port}\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            f"Sec-WebSocket-Key: {key}\r\n"
+            f"Sec-WebSocket-Key: {nonce}\r\n"
             "Sec-WebSocket-Version: 13\r\n"
             "\r\n"
         )
         sock.sendall(req.encode("ascii"))
-        handshake = self._read_until_headers(sock)
+        handshake, leftover = self._read_until_headers(sock)
         first = handshake.split(b"\r\n", 1)[0].decode("ascii", "replace")
         if " 101 " not in first:
+            sock.close()
             raise ConnectionError(f"websocket upgrade failed: {first}")
+
+        # RFC 6455 §4.1: the client MUST verify Sec-WebSocket-Accept.
+        expected = base64.b64encode(
+            hashlib.sha1((nonce + _WS_GUID).encode("ascii")).digest()
+        ).decode("ascii")
+        accept = ""
+        for raw_line in handshake.split(b"\r\n")[1:]:
+            line = raw_line.decode("ascii", "replace")
+            if line.lower().startswith("sec-websocket-accept:"):
+                accept = line.split(":", 1)[1].strip()
+                break
+        if accept != expected:
+            sock.close()
+            raise ConnectionError(
+                f"websocket handshake not accepted by server (accept={accept!r})"
+            )
+
         self._sock = sock
+        # The upgrade response and the first frame can arrive in one TCP
+        # segment; bytes read past the header terminator belong to the frame
+        # stream and must not be dropped.
+        self._buf = bytearray(leftover)
 
     @staticmethod
-    def _read_until_headers(sock: socket.socket) -> bytes:
+    def _read_until_headers(sock: socket.socket) -> tuple[bytes, bytes]:
+        """Read the HTTP upgrade response.
+
+        Returns ``(headers, leftover)`` where ``leftover`` holds any bytes that
+        arrived after the header terminator (already part of the frame stream).
+        """
         data = bytearray()
         while b"\r\n\r\n" not in data:
             chunk = sock.recv(4096)
@@ -164,7 +201,8 @@ class CDPSession:
             data.extend(chunk)
             if len(data) > 16 * 1024:
                 raise ConnectionError("handshake headers too large")
-        return bytes(data)
+        idx = data.find(b"\r\n\r\n") + 4
+        return bytes(data[:idx]), bytes(data[idx:])
 
     def close(self) -> None:
         if self._sock is not None:
@@ -197,18 +235,21 @@ class CDPSession:
         """Return ``(fin, opcode, payload)`` for one frame."""
         if self._sock is None:
             raise ConnectionError("session not connected")
-        b0, b1 = _read_exact(self._sock, 2)
+        head = _read_exact(self._sock, 2, self._buf)
+        b0, b1 = head[0], head[1]
         fin = bool(b0 & 0x80)
         opcode = b0 & 0x0F
         length = b1 & 0x7F
         if length == 126:
-            length = struct.unpack(">H", _read_exact(self._sock, 2))[0]
+            length = struct.unpack(">H", _read_exact(self._sock, 2, self._buf))[0]
         elif length == 127:
-            length = struct.unpack(">Q", _read_exact(self._sock, 8))[0]
+            length = struct.unpack(">Q", _read_exact(self._sock, 8, self._buf))[0]
         if length > FRAME_MAX:
             raise ConnectionError(f"frame too large: {length}")
-        mask_key = _read_exact(self._sock, 4) if b1 & 0x80 else None
-        payload = _read_exact(self._sock, length)
+        mask_key = (
+            _read_exact(self._sock, 4, self._buf) if b1 & 0x80 else None
+        )
+        payload = _read_exact(self._sock, length, self._buf)
         if mask_key:
             payload = bytes(b ^ mask_key[i % 4] for i, b in enumerate(payload))
         return fin, opcode, payload
@@ -224,20 +265,25 @@ class CDPSession:
             if opcode == 0x9:  # ping → pong
                 self._send_frame(0xA, payload)
                 continue
+            if opcode == 0xA:  # pong (unsolicited) → ignore
+                continue
             if opcode == 0x8:  # close
                 raise ConnectionError("websocket closed by peer")
             if opcode in (0x1, 0x2, 0x0):
                 buf.extend(payload)
-                if fin:
-                    try:
-                        parsed: Any = json.loads(bytes(buf).decode("utf-8"))
-                    except json.JSONDecodeError:
-                        if len(buf) > FRAME_MAX:
-                            raise
-                        continue
-                    if not isinstance(parsed, dict):
-                        raise RuntimeError("CDP websocket message is not a JSON object")
-                    return parsed
+                if not fin:
+                    continue  # fragmented message; keep reading continuation frames
+                try:
+                    parsed: Any = json.loads(bytes(buf).decode("utf-8"))
+                except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                    # A non-JSON message on the CDP socket is protocol garbage.
+                    # Previously this looped forever on the same buffer.
+                    raise RuntimeError(
+                        f"non-JSON websocket message ({len(buf)} bytes)"
+                    ) from exc
+                if not isinstance(parsed, dict):
+                    raise RuntimeError("CDP websocket message is not a JSON object")
+                return parsed
 
     # ── CDP calls ──────────────────────────────────────────────────────
 
@@ -251,8 +297,13 @@ class CDPSession:
         self._next_id += 1
         self._send_json({"id": msg_id, "method": method, "params": params or {}})
         deadline = timeout or self.timeout
+        # A page can emit events continuously; bound the total wait rather than
+        # relying on the per-recv socket timeout alone, which resets every event.
+        hard_deadline = time.monotonic() + deadline
         self._sock.settimeout(deadline)
         while True:
+            if time.monotonic() > hard_deadline:
+                raise TimeoutError(f"CDP {method} timed out after {deadline}s")
             resp = self._recv_json()
             if resp.get("id") != msg_id:
                 continue  # event or stale response; ignore
