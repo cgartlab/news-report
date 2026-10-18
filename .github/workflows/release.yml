@@ -41,18 +41,51 @@ jobs:
       - name: Check version consistency
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          # Extract minor+patch from tag (e.g. v0.3.0 -> 0.3.0)
+          # Extract version without leading v (e.g. v0.3.0 -> 0.3.0)
           SHORT="${VERSION#v}"
           echo "Checking version $SHORT across files..."
-          for f in SKILL.md AGENTS.md CHANGELOG.md; do
-            if [ -f "$f" ]; then
-              if grep -q "$SHORT" "$f"; then
-                echo "  ✓ $f contains version $SHORT"
-              else
-                echo "::warning::$f does not contain version $SHORT"
-              fi
+          FAILED=0
+          for f in SKILL.md CHANGELOG.md pyproject.toml; do
+            if [ ! -f "$f" ]; then
+              echo "::error::$f does not exist; cannot verify version"
+              FAILED=1
+              continue
             fi
+            case "$f" in
+              SKILL.md)
+                # 精确匹配 frontmatter 的 version: 字段
+                if grep -E "^version:[[:space:]]*${SHORT//./\.}$" "$f" >/dev/null; then
+                  echo "  ✓ $f frontmatter version = $SHORT"
+                else
+                  echo "::error::$f frontmatter lacks 'version: $SHORT'"
+                  FAILED=1
+                fi
+                ;;
+              CHANGELOG.md)
+                # 精确匹配 Keep a Changelog 的版本标题 ## [x.y.z]
+                if grep -E "^##[[:space:]]*\[${SHORT//./\.}\]" "$f" >/dev/null; then
+                  echo "  ✓ $f has section [$SHORT]"
+                else
+                  echo "::error::$f lacks section [$SHORT]"
+                  FAILED=1
+                fi
+                ;;
+              pyproject.toml)
+                # 精确匹配 project version 字段
+                if grep -E "^version[[:space:]]*=[[:space:]]*\"${SHORT//./\.}\"" "$f" >/dev/null; then
+                  echo "  ✓ $f version = $SHORT"
+                else
+                  echo "::error::$f version != $SHORT"
+                  FAILED=1
+                fi
+                ;;
+            esac
           done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Version consistency check failed — fix the files above before releasing."
+            exit 1
+          fi
+          echo "✓ All version references consistent"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
