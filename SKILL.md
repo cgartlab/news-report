@@ -1,5 +1,6 @@
 ---
 name: news-report
+version: 0.7.1
 description: >-
   Modular news-gathering skill that retrieves news and articles across pluggable
   information sources (Miniflux RSS via the miniflux-mcp MCP server is module 01),
