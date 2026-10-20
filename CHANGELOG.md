@@ -7,7 +7,55 @@
 
 ---
 
+## [0.9.0] - 2026-10-21 _(无 tag)_
+
+> **一句话概括**：这是一次**输出质量与评估链路重构**更新。P0 判定从「关键词猜测」改为「LLM 语义判定」（人身安全 / 重大技术变革 / 影响历史 / 市场剧烈变动 / 革命性产品）；统一单条模板（标题内嵌真实链接 + 140 字摘要 + 来源）；按高价值兴趣反推剔除低价值内容（明星八卦 / 小道消息 / 星座鸡汤）；修复 `{{ postmeta.* }}` 模板占位符残留。
+
+### Added
+
+- **P0 语义判定（`evaluator.assign_semantic_priorities`）**：最终精选的 20 条在渲染前由 LLM 批量判 P0–P3。P0 只给真正重大的信号，宁缺毋滥：
+  - ① 可能危及人身安全；② 重大技术变革；③ 可能影响人类历史的信号；④ 市场剧烈变动信号；⑤ 伟大革命性产品发布
+  - 报告层 `assign_priority` 只消费 LLM 结果，不再靠关键词猜（修复「微软数字主权博客因含 critical 被判 P0」）
+  - 无 LLM 时的规则兜底保守化：仅「新闻源（雷峰/IT之家/央视/新华…）+ 明确突发词」才 P0；非新闻源（博客/论坛/雪球）一律不因关键词进 P0
+- **低价值内容剔除（按高价值反推）**：`rule_score` 增加标题级强负面信号——明星八卦（`明星|八卦|绯闻|恋情|出轨|塌房`）、小道消息（`网传|传闻|爆料|知情人士`）、星座玄学（`星座|运势|占卜|塔罗`）、鸡汤成功学（`心灵鸡汤|成功学|养生秘方`），命中即 `discard`；弱信号（`离婚|疑似|减肥|饭圈`）降分不杀，避免误伤正文提及的科技报道
+- **LLM 评估批次输出 priority**：`FILTER_BATCH_TEMPLATE` 增加 `priority: P0/P1/P2/P3` 输出项，dispute 条目在过滤阶段一并获得优先级，不额外增加 API 调用
+
+### Changed
+
+- **统一单条渲染模板（`src/report.py`）**：P0/P1/P2 三条路径统一为「标题（内嵌原文链接）+ 摘要 ≤140 字 + 来源 · 日期」；`_summary_140` 在句子边界截断并加 `…`。P2 从此不再裸标题
+- **摘要从 200/300 字统一到 140 字**：每条摘要足够判断是否值得打开，信息密度最大化（Telegram 简报场景）
+- **`collect_rss._strip_noise` 增加 `{{...}}` 模板占位符清洗**：修复 `收藏已收藏{{ postmeta.bookmark }}` 残留
+- **SKILL.md 输出模板 / 打分细则同步**：P0 语义五标准、单条模板、低价值剔除清单写入文档
+
+### Fixed
+
+- 微软「数字主权」博客（含 critical）不再误判 P0
+- 「人人都是产品经理」摘要残留 `{{ postmeta.bookmark }}` / `{{ postmeta.postlike }}`
+- P2 条目裸标题无摘要、无链接
+
+### 测试
+
+- `tests/test_quality_2026.py` 新增 15 条：低价值规则（含「正文提及结婚不误杀」）、占位符清洗、140 字截断、priority 兜底与聚合标题限位。`ruff` / `mypy` / `pytest` 全绿（23 passed）
+
+---
+
 ## [0.8.0] - 2026-10-17 _(无 tag)_
+
+### Added
+
+- **新增 Miniflux 采集器（模块 01 · `src/collect_miniflux.py`）——一次 API 请求覆盖全部已订阅 feed**：走 Miniflux REST API 的 `/v1/entries`，替代「逐个抓 RSS 源」。实测该实例有 **85 个订阅源**，而 `config/rss-sources.json` 只有 27 个启用源，信息源数量大幅提升。
+  - 认证：优先 `MINIFLUX_API_KEY`（作 Basic Auth 密码，用户名任意，Miniflux 官方推荐）；无 Key 时退回 `MINIFLUX_USERNAME` / `MINIFLUX_PASSWORD`
+  - 时间窗 `miniflux_hours`（默认 24h，走 `published_after`）、总量上限 `miniflux_limit`（默认 100）、分类过滤 `miniflux_categories`、**单源上限 `miniflux_per_feed_limit`（默认 5）**
+  - 输出字段与其它采集器一致（`id` 前缀 `mf_`、`source_type: "rss"`），下游评估/去重/渲染无需改动
+  - **`miniflux_per_feed_limit` 不是可选优化**：实测不加限制时最终 300 条里 IT之家 独占 182 条；设 5 后降到 5，覆盖来源数从 14 升到 27。高流量单源（IT之家 100+/天）会淹没其他所有源
+  - SKILL.md 模块 01 改为「两条接入路径」：采集器（pipeline）+ MCP 服务器（对话侧），并说明为何 pipeline 不走 MCP（N 次往返 vs 1 次）
+
+### Fixed
+
+- **RSS 日期解析：`Invalid Date` 被当成有效日期输出**：`_normalize_date()` 的兜底分支 `return date_str[:10]` 会把上游的 `Invalid Date` 截成 `Invalid Da`，直接印在简报里。上游数据源本身就坏（RSSHub 的豆瓣路由直接返回 `<pubDate>Invalid Date</pubDate>`），但解析器不该原样透传。
+  - 现先识别 `invalid` / `unknown` / `n/a` / `none` / `null` / `undefined` 等无效值返回空串
+  - 兜底只接受真正以日期开头的字符串（`^\d{4}-\d{2}(-\d{2})?`），`2007-06`（豆瓣出版年月）这类既有行为保留
+  - 16 条用例覆盖中英文日期、RFC 822、ISO 8601、相对日期与各类垃圾值
 
 > **一句话概括**：这是一次**新采集能力 + 默认行为变化**更新。新增 x-browser 模块——通过已登录的浏览器（Edge CDP）深度采集 X/Twitter 时间线；同时采集源改为按开关运行，默认只启用 `rss` + `zhihu`。**如需采集 X / 搜索 / Telegram / B 站 / 小红书，请把 `config/config.json` 的 `enabled_sources` 对应项设为 `true` 并配好凭证；zhihu 模块已从 `zhihu-cli` 迁移到 `zhihu-search`（安装方式改为 `uv tool install zhihu-search`）。**
 
