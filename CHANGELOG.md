@@ -42,6 +42,7 @@
 - 修复 JSON 输出解析：`zhihu-search` 部分子命令会在 stdout 尾部追加 `===` 分隔符，新版解析器带容错 fallback
 - 修复 pipeline 崩溃：`collect_bilibili.py` 在响应结构上假设 dict 但实际返回 list 导致 `AttributeError`——现在通过禁用 bilibili 源避免，`enabled_sources.bilibili = true` 前需先修脚本
 - **修复 SKILL.md frontmatter 版本号停留在 0.7.1**：`0961515`（"merge: 同步 main 并将版本统一为 0.8.0"）只更新了正文「版本信息」段落，未改 frontmatter，导致 `release.yml` 的「Check version consistency」在打 `v0.8.0` tag 时必然失败。现统一为 `0.8.0`。
+- **`tests/` 此前从未被 CI 执行**：仓库有 `tests/test_x_cdp.py`（8 个测试，覆盖 RFC 6455 握手校验、掩码、分片、非 JSON 消息等），但 `lint.yml` 只跑 ruff 与 mypy，`dev` extra 也不含 pytest。现新增 `test` job，并把 `pytest>=8.0` 补进 `dev` extra。
 
 ---
 
