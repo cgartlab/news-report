@@ -34,11 +34,14 @@
 - **采集源按开关运行**：`config/config.json` 新增 `enabled_sources` 和 `disabled_reasons` 字段，`src/main.py` 的 `step_collect` 会按开关跳过未启用的源，并在日志中打印跳过原因。默认只启用 `rss` + `zhihu`，其余源（`search` / `telegram` / `twitter` / `bilibili` / `xhs`）默认禁用——要么凭证缺失，要么依赖未就绪。老板按需打开：填入 `.env` 里的凭证或修好对应 CLI，把 `enabled_sources.X = true` 即可。
 - **SKILL.md 模块状态列更新**：模块 03 / 04 / 05 状态从"✅ 可用（需鉴权）"改为"⏸️ 默认禁用"，附带默认关闭原因；模块 06 / 07 仍为占位。
 
+- **`docs-check.yml` 的版本一致性检查从 warning 升级为硬门禁**：原先只发 `::warning::`，且只比较 SKILL.md / AGENTS.md / CHANGELOG 三处正文的首个 `vX.Y.Z`——frontmatter 与 pyproject.toml 完全没被检查，所以「三处版本不一致但 CI 绿」可以长期存在。现在检查 5 处（SKILL.md frontmatter、SKILL.md 正文、pyproject.toml、CHANGELOG 最新段、AGENTS.md 正文），任一缺失或不一致即 `exit 1`。
+
 ### Fixed
 
 - 修复 `src/collect_zhihu.py` 在 Python 3.10+ 环境下无法调用的问题（旧版依赖 `zhihu-cli auth set` 与 `zhihu-cli status`，两者在新版 CLI 中已不存在）
 - 修复 JSON 输出解析：`zhihu-search` 部分子命令会在 stdout 尾部追加 `===` 分隔符，新版解析器带容错 fallback
 - 修复 pipeline 崩溃：`collect_bilibili.py` 在响应结构上假设 dict 但实际返回 list 导致 `AttributeError`——现在通过禁用 bilibili 源避免，`enabled_sources.bilibili = true` 前需先修脚本
+- **修复 SKILL.md frontmatter 版本号停留在 0.7.1**：`0961515`（"merge: 同步 main 并将版本统一为 0.8.0"）只更新了正文「版本信息」段落，未改 frontmatter，导致 `release.yml` 的「Check version consistency」在打 `v0.8.0` tag 时必然失败。现统一为 `0.8.0`。
 
 ---
 

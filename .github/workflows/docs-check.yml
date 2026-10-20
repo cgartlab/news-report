@@ -59,21 +59,47 @@ jobs:
         run: |
           python3 -c "
           import re
+          import sys
           from pathlib import Path
 
-          versions = {}
-          for name, pattern in [('SKILL.md', r'v(\d+\.\d+\.\d+)'), ('AGENTS.md', r'v(\d+\.\d+\.\d+)'), ('CHANGELOG.md', r'## \[(\d+\.\d+\.\d+)\]')]:
-              f = Path(name)
-              if f.exists():
-                  text = f.read_text()
-                  m = re.findall(pattern, text)
-                  if m:
-                      versions[name] = m[0]
+          # Every place that carries the project version must agree. A mismatch
+          # is a hard failure: release.yml gates on the same three files, so a
+          # stale value here would only surface at tag time.
+          checks = [
+              ('SKILL.md',     'frontmatter', r'^version:[ \t]*(\d+\.\d+\.\d+)[ \t]*$'),
+              ('SKILL.md',     'prose',       r'\*\*Skill 版本\*\*：v(\d+\.\d+\.\d+)'),
+              ('pyproject.toml','project',    r'^version[ \t]*=[ \t]*\"(\d+\.\d+\.\d+)\"'),
+              ('CHANGELOG.md', 'latest',      r'^## \[(\d+\.\d+\.\d+)\]'),
+              ('AGENTS.md',    'prose',       r'\*\*项目版本\*\*：v(\d+\.\d+\.\d+)'),
+          ]
 
-          if len(versions) >= 2:
-              vals = list(versions.values())
-              if len(set(vals)) > 1:
-                  print(f'::warning::Version mismatch: {versions}')
-              else:
-                  print(f'✓ Version consistent across files: {vals[0]}')
+          found = {}
+          missing = []
+          for name, where, pattern in checks:
+              f = Path(name)
+              if not f.exists():
+                  missing.append(f'{name} does not exist')
+                  continue
+              m = re.search(pattern, f.read_text(encoding='utf-8'), re.MULTILINE)
+              if not m:
+                  missing.append(f'{name} ({where}): pattern not found')
+                  continue
+              found[f'{name} ({where})'] = m.group(1)
+
+          for item in missing:
+              print(f'::error::{item}')
+          if missing:
+              sys.exit(1)
+
+          for key, val in found.items():
+              print(f'  {val}  {key}')
+
+          unique = set(found.values())
+          if len(unique) > 1:
+              print('::error::Version mismatch across files - unify before merging:')
+              for key, val in found.items():
+                  print(f'  {val}  {key}')
+              sys.exit(1)
+
+          print(f'✓ Version {unique.pop()} consistent across {len(found)} locations')
           "
