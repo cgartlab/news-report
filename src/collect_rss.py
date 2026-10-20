@@ -52,7 +52,7 @@ def parse_feed(url: str, source_name: str, tags: list[str], limit: int = 10) -> 
                     continue
 
                 # Strip HTML from description
-                desc = _strip_html(desc)[:300]
+                desc = _strip_noise(_strip_html(desc), title)[:300]
                 pub_date = _normalize_date(pub_date)
 
                 items.append(
@@ -82,7 +82,7 @@ def parse_feed(url: str, source_name: str, tags: list[str], limit: int = 10) -> 
                 if not title:
                     continue
 
-                desc = _strip_html(desc)[:300]
+                desc = _strip_noise(_strip_html(desc), title)[:300]
                 pub_date = _normalize_date(pub_date)
 
                 items.append(
@@ -116,11 +116,171 @@ def _get_text(parent, tag_name: str) -> str:
 
 
 def _strip_html(text: str) -> str:
+    import html
     import re
 
-    text = re.sub(r"<[^>]+>", "", text)
+    # Order matters. Unescape first so that escaped markup ("&lt;p&gt;...")
+    # turns into real tags, then strip with a STRICT tag pattern that requires
+    # a letter, "/" or "!" right after "<". A loose `<[^>]+>` would also eat
+    # literal comparisons: "a &lt; b &amp;&amp; c &gt; d" would collapse to "a d".
+    text = html.unescape(text or "")
+    text = html.unescape(text)  # second pass catches double-encoded entities
+    text = re.sub(r"<[a-zA-Z!/][^>]*>", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+# Breadcrumb / byline / chrome prefixes that RSS descriptions carry over from the
+# source page. Measured across a real run: 7 of 20 selected items started with one
+# of these ("首页 > 数码之家 > 奇趣电子 ...", "文 | 指北Focus ...", "0人收藏 分享： ...").
+_NOISE_PATTERNS = [
+    # 收藏 / 分享 / 评论 动作条
+    r"^\d+\s*人\s*(?:收藏|参与|评论|点赞)\s*",
+    r"^(?:收藏|分享|点赞|评论)\s*(?:已)?(?:收藏|分享|点赞|评论)?\s*[:：]?\s*",
+    # 相关文章推荐块
+    r"^相关文章\s*[:：]?\s*",
+    # 时间戳 "2026/10/20 21:00:25 "（必须带年份，避免吃掉正文里的 "20 21:00"）
+    r"^\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?\s*",
+    # 来源行
+    r"^来源\s*[:：]\s*[^\s，。]{1,16}\s*",
+]
+
+# Byline prefixes are only stripped from reasonably long text. A 豆瓣 book
+# summary is essentially "作者: X 出版社: Y 出版年: Z" — stripping "作者:" there
+# would delete the actual content.
+_BYLINE_RE = __import__("re").compile(
+    r"^(?:文|作者|撰文|编辑|责编|记者)\s*[|｜:：、]\s*[^\s，。]{1,20}\s*",
+    __import__("re").IGNORECASE,
+)
+_NOISE_RE = __import__("re").compile("|".join(_NOISE_PATTERNS), __import__("re").IGNORECASE)
+
+# Metadata markers used to locate the start of real content. Each alternative is
+# self-delimiting: we cut right after the marker (and its value, where short).
+_MARKER_RES = [
+    # "2026/10/20 21:00:25 " timestamp
+    __import__("re").compile(r"\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?\s*"),
+    # "来源： IT之家 " / "来源: X"
+    __import__("re").compile(r"来源\s*[:：]\s*[^\s，。|｜]{1,16}\s*"),
+    # "作者： 故渊 " / "作者 | X"
+    __import__("re").compile(r"作者\s*[:：|｜]\s*[^\s，。]{1,20}\s*"),
+    # "责编： 故渊 " / "编辑： X"
+    __import__("re").compile(r"(?:责编|编辑|撰文|记者)\s*[:：|｜]\s*[^\s，。]{1,20}\s*"),
+    # "评论： " (a label with no value; the body follows)
+    __import__("re").compile(r"评论\s*[:：]\s*"),
+    # "文 | X " at the very start of a credit chain
+    __import__("re").compile(r"文\s*[|｜]\s*[^\s，。]{1,20}\s*[，,]?\s*"),
+]
+
+# Site-navigation anchors. When a summary starts with one of these, everything up
+# to the LAST separator in the head is breadcrumb — a generic "peel one segment at
+# a time" rule cannot tell the final crumb ("奇趣电子") from the real title.
+_SITE_NAV_RE = __import__("re").compile(
+    r"^(?:首页|主页|网站首页|首页\s*>)", __import__("re").IGNORECASE
+)
+
+# CMS template placeholders ("{{ postmeta.bookmark }}") that WordPress-style pages
+# leave in feed descriptions. Matched anywhere in the summary, not just at the head.
+_TEMPLATE_PLACEHOLDER_RE = __import__("re").compile(r"\{\{[^}]*\}\}")
+
+# Leading section labels that IT之家-style feeds prepend ("Win11快讯 ", "IT资讯 ").
+# These are category tags, never content. "IT之家" must NOT match — it is the
+# publication name that legitimately opens the body text ("IT之家 10 月 20 日消息").
+_SECTION_LABEL_RE = __import__("re").compile(
+    r"^(?!IT之家)(?:[\u4e00-\u9fa5A-Za-z0-9]{2,10}(?:快讯|资讯|频道|专栏|专题))\s*[|｜:：]?\s*",
+    __import__("re").IGNORECASE,
+)
+
+# 钛媒体 style: "文 | 青眼观察，作者 | 啸清，编辑 | 封飚 " — credits chained with
+# full-width commas. Bounded to at most 4 credits and each credit to 20 chars so
+# the pattern cannot run into the body text.
+_CREDIT_CHAIN_RE = __import__("re").compile(
+    r"^(?:(?:文|作者|撰文|编辑|责编|记者|来源)\s*[|｜:：]\s*[^，。,|｜]{1,20}\s*(?:[，,]\s*)?){1,4}",
+    __import__("re").IGNORECASE,
+)
+
+# A breadcrumb whose first segment is not a site-nav word still looks like
+# "A > B > title"; we only peel if at least two separators appear early.
+_BREADCRUMB_RE = __import__("re").compile(r"^(?!\d{4}[/-])([^\s>＞»/]{1,14})\s*[>＞»]\s*")
+
+# Bibliographic metadata must not be mistaken for a byline: 豆瓣 summaries are
+# literally "作者: X 出版社: Y 出版年: Z", where 作者 is the content.
+_BIBLIO_RE = __import__("re").compile(r"出版社|出版年|ISBN|译者|定价")
+
+
+def _strip_noise(summary: str, title: str = "") -> str:
+    """Trim page chrome so the summary starts at real content.
+
+    Feed descriptions carry arbitrary page scaffolding. Rather than peeling rule
+    after rule (which fights itself), find the LAST metadata marker in the leading
+    window and start after it. Markers are self-delimiting ("来源：", "作者：",
+    "责编：", "评论：", a "2026/10/20 21:00:25" stamp, "首页 > A > B").
+
+    This handles both observed shapes:
+      1. "<stamp> 来源： X 作者： Y <body>"
+      2. "<section> <title> <stamp> 来源： X 作者： Y 评论： <body>"
+    """
+    text = (summary or "").strip()
+    if not text:
+        return ""
+
+    # Template placeholders leaked from CMS pages ("{{ postmeta.bookmark }}",
+    # "{{ postmeta.postlike }}"). They are render artifacts, never content.
+    text = _TEMPLATE_PLACEHOLDER_RE.sub("", text).strip()
+
+    # Shape 2: the headline is re-published inside the summary; the body follows it.
+    if title:
+        idx = text.rfind(title)
+        if idx > 0:
+            text = text[idx + len(title) :].lstrip(" .·-—|｜:：")
+
+    # Breadcrumbs: "首页 > 数码之家 > 奇趣电子 <content>".
+    if _SITE_NAV_RE.match(text):
+        head = text[:80]
+        last = max(head.rfind(">"), head.rfind("＞"), head.rfind("»"))
+        if last > 0:
+            text = text[last + 1 :]
+
+    # Bibliographic entries (豆瓣书籍) are pure metadata: "作者: X 出版社: Y 出版年: Z".
+    # Running the marker pass on them would delete the actual content.
+    if _BIBLIO_RE.search(text[:80]):
+        return str(text.strip())
+
+    # Find the last metadata marker within the leading window, then cut after it.
+    window = text[:220]
+    cut = 0
+    for rx in _MARKER_RES:
+        for m in rx.finditer(window):
+            cut = max(cut, m.end())
+    if cut:
+        text = text[cut:]
+
+    # Anything still leading: bylines, section labels, stray separators.
+    text = _strip_credits(text.lstrip(" .·-—|｜:：，、"))
+    text = str(_SECTION_LABEL_RE.sub("", text)).strip()
+    return text.strip()
+
+
+def _strip_credits(text: str) -> str:
+    """Strip a leading credit chain without eating the body's opening sentence.
+
+    Tricky case: "评论： IT之家 10 月 20 日消息，..." — 「IT之家」 looks like a credit
+    value but opens the sentence. Guard: keep it when followed by "X 月 X 日".
+    """
+    import re as _re
+
+    changed = True
+    while changed:
+        changed = False
+        for rx in (_CREDIT_CHAIN_RE, _BYLINE_RE):
+            m = rx.match(text)
+            if not m:
+                continue
+            rest = text[m.end() :]
+            if _re.match(r"^[^\s]{0,8}\s*\d{1,2}\s*月\s*\d{1,2}\s*日", rest):
+                continue
+            text = rest.strip()
+            changed = True
+    return text
 
 
 def _normalize_date(date_str: str) -> str:
@@ -234,8 +394,21 @@ def _normalize_date(date_str: str) -> str:
                 return dt.strftime("%Y-%m-%d")
             return parsed
 
+    # Upstream sometimes emits literal junk instead of a date (RSSHub's douban
+    # routes send "<pubDate>Invalid Date</pubDate>"). Reject it here so it never
+    # reaches the report as a fake date.
+    if re.fullmatch(
+        r"(?i)\s*(invalid|unknown|n/?a|none|null|undefined)\s*(date|time)?\s*", date_str
+    ):
+        return ""
+
     # Last resort: raw string first 10 chars (usually already YYYY-MM-DD-ish)
-    return date_str[:10]
+    # Only trust it when it actually starts with a date; otherwise return "" so
+    # the renderer can omit the field instead of printing garbage.
+    m = re.match(r"^\d{4}-\d{2}(-\d{2})?", date_str)
+    if m:
+        return m.group()
+    return ""
 
 
 def _parse_month_and_build(year: int, day: int, month_abbr: str) -> str | None:

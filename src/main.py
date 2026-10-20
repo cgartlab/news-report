@@ -28,6 +28,7 @@ load_env()
 
 # Import submodules
 from collect_bilibili import collect_bilibili  # noqa: E402
+from collect_miniflux import collect_miniflux  # noqa: E402
 from collect_rss import collect_rss  # noqa: E402
 from collect_search import collect_search  # noqa: E402
 from collect_telegram import collect_telegram  # noqa: E402
@@ -104,7 +105,21 @@ def step_collect():
         _skip("telegram")
         tg_items = []
 
-    # RSS (default enabled)
+    # Miniflux (module 01) — one API call covers every subscribed feed.
+    if _enabled("miniflux"):
+        miniflux_items = collect_miniflux(
+            hours=config.get("miniflux_hours", 24),
+            limit=config.get("miniflux_limit", 100),
+            categories=config.get("miniflux_categories") or None,
+            per_feed_limit=config.get("miniflux_per_feed_limit", 5),
+        )
+        log(f"Miniflux collected: {len(miniflux_items)}")
+        total += len(miniflux_items)
+    else:
+        _skip("miniflux")
+        miniflux_items = []
+
+    # RSS direct (default enabled)
     if _enabled("rss"):
         rss_items = collect_rss(
             rss_sources, limit_per_source=config.get("rss_limit_per_source", 10)
@@ -179,6 +194,7 @@ def step_collect():
 
     all_items = (
         tg_items
+        + miniflux_items
         + rss_items
         + search_items
         + zhihu_items
@@ -191,7 +207,22 @@ def step_collect():
         for item in all_items:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
-    log(f"Collect step complete: {total} total items written")
+    # Persist the collection scale so step_report can show it later. The report
+    # stage only sees the curated set; without this it cannot tell 239 collected
+    # from 20 selected, and the header would hide the true source coverage.
+    stats = {
+        "collected": len(all_items),
+        "sources": len({i.get("source") for i in all_items if i.get("source")}),
+        "by_source": {
+            s: sum(1 for i in all_items if i.get("source") == s)
+            for s in {i.get("source") for i in all_items if i.get("source")}
+        },
+    }
+    (SKILL_DIR / "data" / "collect_stats.json").write_text(
+        json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    log(f"Collect step complete: {total} total items written ({stats['sources']} sources)")
     return total
 
 
@@ -224,7 +255,18 @@ def step_report():
     if not items:
         log("No items to report")
         return ""
-    report = generate_report(items)
+
+    collected = 0
+    sources = 0
+    stats_file = SKILL_DIR / "data" / "collect_stats.json"
+    try:
+        stats = json.loads(stats_file.read_text(encoding="utf-8"))
+        collected = int(stats.get("collected") or 0)
+        sources = int(stats.get("sources") or 0)
+    except (OSError, ValueError, json.JSONDecodeError):
+        pass
+
+    report = generate_report(items, collected=collected, sources=sources)
     save_report(report)
     return report
 
