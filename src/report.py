@@ -24,7 +24,7 @@ from evaluator import (  # noqa: E402,F401
     _P0_WEAK_KW,
     Item,
 )
-from textclean import normalize_cjk_spacing  # noqa: E402
+from textclean import normalize_cjk_spacing, strip_markdown_noise  # noqa: E402
 
 SKILL_DIR = Path(__file__).parent.parent
 
@@ -56,7 +56,7 @@ def _is_aggregate_title(title: str) -> bool:
 def assign_priority(item: Item) -> str:
     """Priority for the report.
 
-    The LLM pass (evaluator.assign_semantic_priorities) decides P0–P3 semantically
+    The LLM pass (evaluator.assign_semantic_priorities) decides P0-P3 semantically
     and stores it on item.priority. This function only translates that stored value
     and applies keyword fallback when it is missing (e.g. --skip-llm or an item that
     bypassed the LLM). It does NOT re-guess P0 from bare keywords — the Microsoft
@@ -158,6 +158,8 @@ def render_title(item: Item) -> str:
     display_title = re.sub(r"\*\*(.+?)\*\*", r"\1", display_title)
     # Remove extra `markdown` backticks
     display_title = re.sub(r"`(.+?)`", r"\1", display_title)
+    # Any emphasis marker left over (a dangling `*` breaks Markdown rendering)
+    display_title = strip_markdown_noise(display_title)
     # Chinese typography dirt ("华为 鸿蒙") — see src/textclean.py.
     display_title = normalize_cjk_spacing(display_title)
     # Limit to 100 chars for readability
@@ -173,7 +175,7 @@ def _summary_140(item: Item) -> str:
     enough to decide whether to open it — dense but scannable."""
     # Normalise before measuring, so the 140-char budget buys real content
     # instead of the spaces left behind by HTML tag removal.
-    raw = normalize_cjk_spacing((item.summary or "").strip())
+    raw = normalize_cjk_spacing(strip_markdown_noise((item.summary or "").strip()))
     if not raw:
         return ""
 
@@ -339,8 +341,9 @@ def generate_report(items: list[Item], collected: int = 0, sources: int = 0) -> 
         lines.append(SEPARATOR)
         for item in p0_items:
             lines.append(render_item_p1_p0(item))
+            # The per-item blank doubles as the gap before the next section —
+            # appending a second one produced a double blank line in the output.
             lines.append("")
-        lines.append("")
 
     # ── P1: 关注 ──
     if p1_items:
@@ -349,7 +352,6 @@ def generate_report(items: list[Item], collected: int = 0, sources: int = 0) -> 
         for item in p1_items:
             lines.append(render_item_p1_p0(item))
             lines.append("")
-        lines.append("")
 
     # ── P2: 常规 ──
     if p2_items:

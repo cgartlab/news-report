@@ -953,7 +953,10 @@ python3 scripts/cooldown_check.py prune
 
 > **v0.3.0 正式定义。** Agent 直接路径按本节模板排版；脚本路径由 `src/report.py` 自动生成。模板设计原则：**信息密度最大化、阅读体验最优化、节奏从冲击到沉静的叙事弧**。
 >
-> **⚠️ v0.7.0 补充说明**：本节模板是**代码路径的自动化排版模板**（TOP SIGNAL / 优先级分区 / 影响分析 / 示例），由 `src/report.py` 消费。Agent **对话直跑模式**（老板要求生成日报/早报时）应使用运行时 skill `~/.hermes/skills/news-report/SKILL.md` 里的【输出模板】章节，其中每条新闻必须带本文档前几节定义的 5 个元数据字段（Significance / Development Status / Key Entities / Sentiment / Data Quality），并在结尾调用 `scripts/cooldown_check.py push` 记录事件签名。两条路径产出内容不同：本节的 TOP SIGNAL + 影响分析 + 职业风险矩阵适合长版深度分析，运行时模板适合 Telegram 友好的日常简报。
+> **⚠️ v0.7.0 补充说明（2026-10-23 校正）**：本节是**长版深度分析模板**（TOP SIGNAL / 优先级分区 / 影响分析 / 职业风险矩阵），用于 Agent 在对话里手工生成长文简报。
+> **`src/report.py` 并不渲染本节模板** —— 它输出的是 `📰 NEWS REPORT` 简版：header（采集量 / 精选量 / 优先级计数）→ 🔴🟡🟢🔵 四区 → 📊 来源统计，单条格式见下文「单条模板」。
+> Agent **对话直跑模式**（老板要求生成日报/早报时）应使用运行时 skill 里的【输出模板】章节，每条新闻带本文档前几节定义的 5 个元数据字段（Significance / Development Status / Key Entities / Sentiment / Data Quality），并在结尾调用 `scripts/cooldown_check.py push` 记录事件签名。
+> 三条路径产出的内容不同：本节长版适合深度分析，`src/report.py` 简版适合脚本/定时批量，运行时模板适合 Telegram 日常简报。**改本节模板不会影响 `src/report.py` 的输出**，反之亦然。
 
 ### 设计原则
 
@@ -1213,7 +1216,7 @@ HTML 去标签时内联标签（`<span>` `<a>` `<strong>`）必须直接消失�
 
 ## 版本信息
 
-- **Skill 版本**：v0.9.0 —— P0 语义判定（评估阶段 LLM 批量判 P0–P3，五条语义标准）+ 统一 140 字单条模板（标题内嵌真实链接）+ 低价值内容剔除（明星八卦 / 小道消息 / 星座鸡汤，按高价值兴趣反推）+ 修复 `{{ postmeta.* }}` 占位符残留。
+- **Skill 版本**：v0.9.0 —— P0 语义判定（评估阶段 LLM 批量判 P0-P3，五条语义标准）+ 统一 140 字单条模板（标题内嵌真实链接）+ 低价值内容剔除（明星八卦 / 小道消息 / 星座鸡汤，按高价值兴趣反推）+ 修复 `{{ postmeta.* }}` 占位符残留。
   - v0.8.0 —— 新增模块 06 · x-browser（X 时间线 · Edge CDP）：零依赖 CDP 客户端（`src/x_cdp.py`）、时间线采集器（`src/collect_x_browser.py`）、跨平台启动器（`bin/edge-cdp.ps1` / `bin/edge-cdp.sh`）；规划中占位模块重编号为 07（`rss-http`）与 08（`news-api`）；并同步了版本信息口径（此前 SKILL.md 停留在 v0.6.1，而 CHANGELOG 已到 0.7.1）。
   - v0.7.1 —— 修复失效链接 + Contract 表补「本地中间文件」行（CHANGELOG 已记录，SKILL.md 版本信息此前未同步）。
   - v0.7.0 —— 元数据字段体系（5 字段强制标注）、打分细则、状态存储与冷却机制、输出模板双路径（CHANGELOG 已记录，SKILL.md 版本信息此前未同步）。

@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 # noqa: E402 — import after sys.path bootstrap
-from textclean import normalize_cjk_spacing  # noqa: E402
+from textclean import normalize_cjk_spacing, strip_markdown_noise  # noqa: E402
 
 SKILL_DIR = Path(__file__).parent.parent
 
@@ -306,9 +306,10 @@ def _strip_noise(summary: str, title: str = "") -> str:
     # leaving the summary starting at a full stop ("。相关研究表明…").
     text = _strip_credits(text.lstrip(" .·-—|｜:：，、。；！？"))
     text = str(_SECTION_LABEL_RE.sub("", text)).strip()
-    # Last pass: collapse Chinese typography dirt left by markup removal
-    # ("华为 鸿蒙", "万台 ，"). See src/textclean.py.
-    return normalize_cjk_spacing(text)
+    # Last pass: Markdown residue (dangling `*` from `*Journal Name*`) and Chinese
+    # typography dirt left by markup removal ("华为 鸿蒙", "万台 ，").
+    # See src/textclean.py.
+    return normalize_cjk_spacing(strip_markdown_noise(text))
 
 
 def _strip_credits(text: str) -> str:

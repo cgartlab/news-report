@@ -32,6 +32,23 @@ _AFTER_OPEN_RE = re.compile(rf"(?<=[{_OPEN_PUNCT}])[ \t]+")
 _ZERO_WIDTH_RE = re.compile(r"[\u200b-\u200d\u2060\ufeff]")
 _SPACE_RUN_RE = re.compile(r"[ \t]{2,}")
 
+# Markdown residue from feed bodies: `*Psychological Medicine*` arrives as
+# literal asterisks. Our template owns the formatting, and a summary truncated
+# mid-emphasis leaves a dangling `*` that breaks downstream Markdown renderers.
+_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_MD_ITALIC_RE = re.compile(r"(?<![*\w])\*([^*\n]{1,120})\*(?![*\w])")
+_STRAY_STAR_RE = re.compile(r"\*+")
+
+
+def strip_markdown_noise(text: str) -> str:
+    """Drop Markdown emphasis markers that leaked out of feed bodies."""
+    if not text:
+        return ""
+    t = _MD_BOLD_RE.sub(r"\1", text)
+    t = _MD_ITALIC_RE.sub(r"\1", t)
+    t = _STRAY_STAR_RE.sub("", t)
+    return t
+
 
 def normalize_cjk_spacing(text: str) -> str:
     """收敛中文排版：删掉句中/标点旁的多余空格。幂等，对纯英文文本无副作用。"""

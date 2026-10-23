@@ -131,6 +131,54 @@ class TestUnifiedTemplate:
         assert len(cleaned) <= 141
 
 
+# ─── 5. Markdown 残留与空行 ─────────────────────────────────────────────────
+
+
+class TestMarkdownResidue:
+    def test_italic_journal_title_stripped(self):
+        item = make_item(summary="一项发表于《心理医学》（*Psychological Medicine*）的研究指出。")
+        assert "*" not in _summary_140(item)
+        assert "Psychological Medicine" in _summary_140(item)
+
+    def test_bold_stripped(self):
+        item = make_item(summary="**重点**：模型发布")
+        assert _summary_140(item) == "重点：模型发布"
+
+    def test_dangling_asterisk_stripped(self):
+        item = make_item(summary="原文含 * 号残留，不应出现在简报里")
+        assert "*" not in _summary_140(item)
+
+    def test_escaped_emphasis_not_doubled(self):
+        from textclean import strip_markdown_noise
+
+        assert strip_markdown_noise("*a* and **b**") == "a and b"
+
+
+class TestBlankLineHygiene:
+    def test_no_double_blank_lines(self):
+        from report import generate_report
+
+        items = [
+            make_item(title="P1 a", source="S1", priority="P1"),
+            make_item(title="P1 b", source="S2", priority="P1"),
+            make_item(title="P2 a", source="S3", priority="P2"),
+            make_item(title="P3 a", source="S4", priority="P3"),
+        ]
+        report = generate_report(items)
+        assert "\n\n\n" not in report
+
+    def test_single_gap_between_sections(self):
+        from report import generate_report
+
+        items = [
+            make_item(title="P1 a", source="S1", priority="P1"),
+            make_item(title="P2 a", source="S3", priority="P2"),
+        ]
+        report = generate_report(items)
+        head, rest = report.split("🟢 常规 (P2)")
+        assert head.endswith("\n\n")
+
+
 # ─── 4. 单源上限 ─────────────────────────────────────────────────────────────
 
 

@@ -27,7 +27,10 @@
 
 ### Fixed
 
+- **摘要/标题里残留 Markdown 强调符**：`*Psychological Medicine*` 这类原文斜体直接印成 `*`，截断后还会留下不闭合的 `*` 破坏下游 Markdown 渲染。新增 `textclean.strip_markdown_noise`，采集层与渲染层都过一遍。
+- **P1 段末多一个空行**：每条后已补一个空行，区段结束又追加一个，输出里出现连续两个空行。
 - **`src/evaluator.py` 未通过 `ruff format`**：CI 的 `ruff format --check src/` 会失败。仅格式调整（切片空格、长行换行、print 换行），无行为变化。
+- **SKILL.md 声称 `src/report.py` 消费 TOP SIGNAL 长版模板**：实际脚本输出的是 `📰 NEWS REPORT` 简版（四优先级区 + 来源统计），并无 TOP SIGNAL / 影响分析 / 职业风险矩阵。已按实际行为改写该说明，明确三条路径各产出什么。
 
 ---
 
@@ -37,7 +40,7 @@
 
 ### Added
 
-- **P0 语义判定（`evaluator.assign_semantic_priorities`）**：最终精选的 20 条在渲染前由 LLM 批量判 P0–P3。P0 只给真正重大的信号，宁缺毋滥：
+- **P0 语义判定（`evaluator.assign_semantic_priorities`）**：最终精选的 20 条在渲染前由 LLM 批量判 P0-P3。P0 只给真正重大的信号，宁缺毋滥：
   - ① 可能危及人身安全；② 重大技术变革；③ 可能影响人类历史的信号；④ 市场剧烈变动信号；⑤ 伟大革命性产品发布
   - 报告层 `assign_priority` 只消费 LLM 结果，不再靠关键词猜（修复「微软数字主权博客因含 critical 被判 P0」）
   - 无 LLM 时的规则兜底保守化：仅「新闻源（雷峰/IT之家/央视/新华…）+ 明确突发词」才 P0；非新闻源（博客/论坛/雪球）一律不因关键词进 P0
@@ -267,7 +270,7 @@
 
 ### Added
 
-- **GitHub Actions: 代码质量检查**（`.github/workflows/lint.yml`）：ruff lint + ruff format check + mypy type check（Python 3.10–3.13 matrix）+ JSON 配置验证 + .env.example 格式检查。
+- **GitHub Actions: 代码质量检查**（`.github/workflows/lint.yml`）：ruff lint + ruff format check + mypy type check（Python 3.10-3.13 matrix）+ JSON 配置验证 + .env.example 格式检查。
 - **GitHub Actions: 自动化发布**（`.github/workflows/release.yml`）：tag 推送或手动触发 → 验证 CHANGELOG 版本一致性 → 检查 SKILL.md / AGENTS.md / CHANGELOG.md 版本同步 → 自动创建 GitHub Release（含 release notes）。
 - **GitHub Actions: 文档检查**（`.github/workflows/docs-check.yml`）：Markdown 尾随空格检查 + 代码块标记配平检查 + 版本一致性检查。
 - **pyproject.toml**：Python 项目配置（ruff lint + format + mypy + isort），统一代码风格与类型检查规则。
