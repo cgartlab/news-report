@@ -607,10 +607,8 @@ def assign_semantic_priorities(items: list[Item]) -> list[Item]:
         # SenseNova 面对真实长输入常无视格式、以叙述作答（"Item 14: ... P1."）。
         # 两段式解析：先找行首锚定的严格行，再退回全文中的 "数字 P级" 对。
         # 后者容忍叙述式输出（"1. Access OpenAI... P1" / "Item 14 ... P1"）。
-        tail = response[-min(len(response), 2500):]
-        strict = __import__("re").compile(
-            r"(?m)^\s*(\d{1,2})\s*[.::：|｜、)）]?\s*(P[0-3])\b"
-        )
+        tail = response[-min(len(response), 2500) :]
+        strict = __import__("re").compile(r"(?m)^\s*(\d{1,2})\s*[.::：|｜、)）]?\s*(P[0-3])\b")
         loose = __import__("re").compile(
             r"(?:item\s*)?(\d{1,2})\s*[.::：|｜、)）]?\s*(?:is\s+)?(P[0-3])\b"
         )
@@ -627,8 +625,10 @@ def assign_semantic_priorities(items: list[Item]) -> list[Item]:
                 if 0 <= idx < len(items) and not items[idx].priority:
                     items[idx].priority = m.group(2).upper()
                     assigned += 1
-    print(f"[Priority] assigned {assigned}/{len(items)} via LLM"
-          + (f" (raw reply tail: {response[-200:]!r})" if not assigned else ""))
+    print(
+        f"[Priority] assigned {assigned}/{len(items)} via LLM"
+        + (f" (raw reply tail: {response[-200:]!r})" if not assigned else "")
+    )
 
     # Fill anything the LLM skipped with the rule default.
     for it in items:
