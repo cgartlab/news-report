@@ -34,6 +34,12 @@
 - **`src/evaluator.py` 未通过 `ruff format`**：CI 的 `ruff format --check src/` 会失败。仅格式调整（切片空格、长行换行、print 换行），无行为变化。
 - **SKILL.md 声称 `src/report.py` 消费 TOP SIGNAL 长版模板**：实际脚本输出的是 `📰 NEWS REPORT` 简版（四优先级区 + 来源统计），并无 TOP SIGNAL / 影响分析 / 职业风险矩阵。已按实际行为改写该说明，明确三条路径各产出什么。
 
+### 文档
+
+- **README 重写**：架构树对齐真实文件（`src/`、`tests/`、`config/`、`bin/`、`.github/actions/publish`），开发命令改为 `pip install -e '.[dev]'` + pytest，发布章节改为「五处版本一致」，新增 **Publishing (ClawHub / SkillHub)** 章节（slug / secrets / dry-run / SkillHub 拒收无扩展名文件）。
+- **AGENTS.md 校正**：不再称本仓库为「文档型仓库」（已有 `src/` 流水线）；输出模板区分长版深度模板与 `src/report.py` 简版；模块现状改为「01-06 均已实现，07/08 占位」；版本口径由「三处」改为「五处」；文件地图补 `LESSONS.md`、`src/`、`tests/`、`.github/actions/publish`；典型任务表补「发布到 ClawHub / SkillHub」一行。
+- **LESSONS.md 增补 4 条**：CI 5 秒零步骤 = 计费问题、`CONFLICTING` 的 PR 不触发 `pull_request` workflow、Windows CRLF 造成 `ruff format` 假阳性、输出脏先查采集层再动渲染层。
+
 ---
 
 ## [0.9.0] - 2026-10-21 _(无 tag)_

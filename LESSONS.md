@@ -41,3 +41,7 @@
 - 失误：规划中模块残留可被误调用的「工具名」→ 规则：占位模块章节不得出现工具名（见 AGENTS.md「质量门禁」）
 - 失误：源码 mypy 类型错误未守 → 规则：None 返回值与 Any→bool 要显式守卫（commit 134ba37、3c06243）
 - 失误：LLM 集成缺 content 直接报错 → 规则：LLM 返回缺 content 要容错（commit 2f8069e）
+- 失误：把 CI 全红当成代码问题改 workflow → 规则：job 在 5 秒内零步骤失败时先看 `gh api repos/<o>/<r>/check-runs/<id>/annotations`，出现 `payments failed` / spending limit 就是仓库计费或可见性问题（私有仓库 → public 可恢复），改 workflow 是白费
+- 失误：PR 上「no checks reported」被当成 workflow 没写好 → 规则：先 `gh pr view <n> --json mergeable`；`CONFLICTING` 的 PR 不会触发 `pull_request` workflow，解冲突后下一次 push 才会真正跑
+- 失误：在 Windows 上用 `ruff format --check` 判定格式门禁，6 个文件被判「未格式化」实为 CRLF 检出差异 → 规则：格式门禁以 LF 副本（`tr -d '\r'`）或 CI 结果为准；批量格式化后立刻 `git diff --numstat` 确认改动不是只剩行尾
+- 失误：以为简报脏排版是渲染层问题，改 `report.py` 无效 → 规则：输出脏先看 `data/items.jsonl` 里的原始字段，定位是采集层（`_strip_html` / `_strip_noise`）还是渲染层，再决定改哪层
