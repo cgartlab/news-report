@@ -142,7 +142,7 @@ def _find_llm():
     return None, None, None
 
 
-def call_llm(prompt: str) -> str:
+def call_llm(prompt: str, *, max_tokens: int = 600, temperature: float = 0.3) -> str:
     """Single LLM call with retries and timeout."""
     url, key, model = _find_llm()
     if not url:
@@ -151,8 +151,8 @@ def call_llm(prompt: str) -> str:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3,
-        "max_tokens": 600,  # SenseNova needs headroom for reasoning + content
+        "temperature": temperature,
+        "max_tokens": max_tokens,
     }
 
     for attempt in range(MAX_RETRIES + 1):
@@ -188,6 +188,9 @@ class Item:
     date: str
     verdict: str = "pending"
     verdict_reason: str = ""
+    # Semantic priority assigned by the LLM pass (P0/P1/P2/P3). Decided at eval
+    # time, NOT by keyword guessing in report.py — see assign_priority there.
+    priority: str = ""
     filter_note: str = ""
     challenge_note: str = ""
     dispute_note: str = ""
@@ -299,6 +302,40 @@ TECH_SOURCES = {
 }
 
 
+# Title-level markers for calls-to-action that are not news: 征文/征稿/招募/征集.
+# These are matched against the TITLE ONLY — as a full-text substring they would
+# wrongly discard every article that merely mentions "征文" in passing.
+_CTA_TITLE_RE = __import__("re").compile(
+    r"(征文|征稿|投稿|有奖征集|作品征集|招募|征集令|报名开启|报名中)",
+    __import__("re").IGNORECASE,
+)
+_CTA_STRONG_RE = __import__("re").compile(r"(征文|征稿|征集令|有奖征集|作品征集)")
+
+
+# Low-value / no-cognitive-gain content. The user's rule: high-value is defined by
+# interest (AI/design/invest/productivity/digital sovereignty/big tech/retro-futurism),
+# and low-value is everything that fails that test while also being celebrity gossip,
+# unverified rumors, or clickbait with no information gain. These are TITLE-level
+# strong negatives: they must never reach the final report even if the LLM is down.
+#
+# Strong negatives — one hit discards immediately:
+_LOW_VALUE_STRONG_RE = __import__("re").compile(
+    r"(明星|八卦|绯闻|恋情|出轨|塌房|私生活|狗仔|"
+    r"网传|传闻|爆料|知情人士|据传|小道消息|"
+    r"星座|运势|占卜|塔罗|风水|"
+    r"心灵鸡汤|成功学|养生秘方|排毒|冥想速成)",
+    __import__("re").IGNORECASE,
+)
+
+# Weak negatives — demote strongly but do not auto-discard (they can be real news):
+_LOW_VALUE_WEAK_RE = __import__("re").compile(
+    r"(离婚|结婚|分手|官宣|整容|"
+    r"疑似|猜测|听说|据说|或将|可能推出|"
+    r"减肥|穿搭|妆容|追星|饭圈)",
+    __import__("re").IGNORECASE,
+)
+
+
 def rule_score(item: Item) -> tuple[str, str]:
     """
     Primary rule-based scorer — no API needed, runs instantly.
@@ -312,6 +349,23 @@ def rule_score(item: Item) -> tuple[str, str]:
     # Penalties
     if any(p in text_blob for p in SKIP_PATTERNS):
         return "discard", "系统消息/低价值通知类内容"
+
+    # Calls-to-action (征文/征稿/招募) are announcements, not news. Strong markers
+    # discard; weak ones ("招募") only demote, since they can appear in real news.
+    if _CTA_STRONG_RE.search(item.title or ""):
+        return "discard", "征稿/征文类公告，非新闻"
+    if _CTA_TITLE_RE.search(item.title or ""):
+        score -= 2.5
+        reasons.append("征集/招募类")
+
+    # Low-value content: celebrity gossip, unverified rumors, astrology, life-hack
+    # clickbait. Strong markers discard outright; weak ones demote below the keep
+    # threshold so the LLM/selection pass would need strong reasons to bring them back.
+    if _LOW_VALUE_STRONG_RE.search(item.title or ""):
+        return "discard", "低价值内容（明星八卦/小道消息/无认知增量）"
+    if _LOW_VALUE_WEAK_RE.search(item.title or ""):
+        score -= 3.0
+        reasons.append("低价值弱信号")
 
     bait_count = sum(1 for p in ENGAGEMENT_BAIT if p in title_lower)
     if bait_count >= 2:
@@ -375,11 +429,24 @@ FILTER_ITEM_TEMPLATE = """\
 判断：keep / discard"""
 
 FILTER_BATCH_TEMPLATE = """\
-以下{count}条信息，判断是否值得进入资讯汇报（keep=值得，discard=不值得）。
+以下{count}条信息，判断是否值得进入资讯汇报（keep=值得，discard=不值得），
+并为 keep 的条目给出优先级（priority）。
+
+优先级判定标准（P0 最高，只给真正重大的信号，宁缺毋滥）：
+  P0 = 可能危及人身安全 / 重大技术变革 / 可能影响人类历史的信号 /
+       市场剧烈变动信号 / 伟大革命性产品发布
+  P1 = 高度相关、对读者有实质价值但未达 P0 的重大程度
+  P2 = 常规内容，值得知道但谈不上重大
+  P3 = 背景性内容
+
+低价值内容一律 discard：明星八卦、小道消息/未经证实传闻、星座运势、
+心灵鸡汤、无认知增量的内容农场。不要因为标题出现个别词就误杀正文
+其实是正经报道的条目；以整体内容判断。
 
 输出格式（每条）：
 {{id}}
 verdict: keep/discard
+priority: P0/P1/P2/P3（仅 keep 需要）
 reason: 原因
 
 ---
@@ -438,6 +505,12 @@ def run_llm_filter_single(batch: list[Item]) -> list[Item]:
             if line.startswith("verdict:"):
                 v = line.split(":", 1)[1].strip().lower()
                 item.verdict = "keep" if "keep" in v and "discard" not in v else "discard"
+            elif line.startswith("priority:"):
+                p = line.split(":", 1)[1].strip().upper()
+                # Accept "P0"…"P3"; strip any trailing words a model may add.
+                pm = __import__("re").search(r"\bP[0-3]\b", p)
+                if pm and item.verdict in ("keep", "keep_for_reader", "dispute"):
+                    item.priority = pm.group(0)
             elif line.startswith("reason:") and not item.verdict_reason:
                 item.verdict_reason = line.split(":", 1)[1].strip()[:100]
                 current_id = None
@@ -483,6 +556,138 @@ def load_items() -> list[Item]:
     return items
 
 
+def assign_semantic_priorities(items: list[Item]) -> list[Item]:
+    """Batch-assign P0–P3 semantic priority to the final selection.
+
+    Runs AFTER final_llm_selection so it covers exactly the items that will be
+    rendered — one LLM call for the whole batch, not one per item. The five P0
+    criteria are semantic (safety / historic / market-moving / revolutionary), so
+    keyword matching in report.py cannot do this reliably.
+    """
+    if not items:
+        return items
+
+    url, key, model = _find_llm()
+    if not url:
+        print("[Priority] No LLM — falling back to rule defaults")
+        for it in items:
+            if not it.priority:
+                it.priority = _rule_priority_fallback(it)
+        return items
+
+    # Rule-level fast path first: clear breaking news from a news outlet is P0
+    # regardless of what the LLM says; saves prompt tokens for obvious cases.
+    for it in items:
+        if not it.priority:
+            it.priority = _rule_priority_fallback(it, fast_only=True)
+
+    items_text = "\n".join(
+        f"{i + 1}|{it.title[:80].replace(chr(10), ' ')}|{it.summary[:60].replace(chr(10), ' ')}"
+        for i, it in enumerate(items)
+    )
+    prompt = (
+        "为下列 20 条新闻各指定优先级。这是机械标注任务：\n"
+        "P0 = 危及人身安全 / 重大技术变革 / 影响人类历史 / 市场剧烈变动 / 革命性产品（通常 0-2 条）\n"
+        "P1 = 高价值但未达 P0\n"
+        "P2 = 常规\n"
+        "P3 = 背景或低价值\n"
+        "严格输出 20 行，每行格式：<数字> <P0|P1|P2|P3>\n"
+        "不要输出任何解释、标题、标点、空行之外的文字。\n\n"
+        f"{items_text}"
+    )
+    try:
+        # 判断 20 条需要更多 token（600 会截断），且更低温度让它更机械。
+        response = call_llm(prompt, max_tokens=1200, temperature=0.1)
+    except Exception as e:
+        print(f"[Priority] LLM call failed: {e}")
+        response = ""
+
+    assigned = 0
+    if response:
+        # SenseNova 面对真实长输入常无视格式、以叙述作答（"Item 14: ... P1."）。
+        # 两段式解析：先找行首锚定的严格行，再退回全文中的 "数字 P级" 对。
+        # 后者容忍叙述式输出（"1. Access OpenAI... P1" / "Item 14 ... P1"）。
+        tail = response[-min(len(response), 2500) :]
+        strict = __import__("re").compile(r"(?m)^\s*(\d{1,2})\s*[.::：|｜、)）]?\s*(P[0-3])\b")
+        loose = __import__("re").compile(
+            r"(?:item\s*)?(\d{1,2})\s*[.::：|｜、)）]?\s*(?:is\s+)?(P[0-3])\b"
+        )
+
+        for m in strict.finditer(tail):
+            idx = int(m.group(1)) - 1
+            if 0 <= idx < len(items):
+                items[idx].priority = m.group(2).upper()
+                assigned += 1
+
+        if assigned < len(items):
+            for m in loose.finditer(tail):
+                idx = int(m.group(1)) - 1
+                if 0 <= idx < len(items) and not items[idx].priority:
+                    items[idx].priority = m.group(2).upper()
+                    assigned += 1
+    print(
+        f"[Priority] assigned {assigned}/{len(items)} via LLM"
+        + (f" (raw reply tail: {response[-200:]!r})" if not assigned else "")
+    )
+
+    # Fill anything the LLM skipped with the rule default.
+    for it in items:
+        if not it.priority:
+            it.priority = _rule_priority_fallback(it)
+    return items
+
+
+# News outlets that are allowed to claim P0 on a strong keyword alone. A blog
+# ("The Official Microsoft Blog") or a stock forum must never hit P0 on a bare
+# word like "critical".
+_NEWS_SOURCE_RE = __import__("re").compile(
+    r"(雷峰|IT之家|爱范儿|少数派|虎嗅|36氪|36kr|cnBeta|新浪|搜狐|网易|腾讯|"
+    r"央视|新华|人民日报|澎湃|财新|界面|钛媒体|品玩|极客公园|果壳|"
+    r"Reuters|AP\b|Bloomberg|CNBC|TechCrunch|The\s*Verge|WIRED|Ars|Engadget|"
+    r"纽约时报|华尔街日报|FT\b|BBC)",
+    __import__("re").IGNORECASE,
+)
+
+# Strong breaking signals: these alone justify P0 from a news outlet.
+_P0_STRONG_KW = ("突发", "紧急通知", "breaking", "BREAKING", "urgent alert")
+
+# Weak signals: need to co-occur with a news outlet to reach P0.
+_P0_WEAK_KW = (
+    "重大",
+    "历史性",
+    "里程碑",
+    "革命性",
+    "颠覆",
+    "首次",
+    "史无前例",
+    "critical",
+    "emergency",
+    "historic",
+    "milestone",
+    "revolutionary",
+)
+
+
+def _rule_priority_fallback(item: Item, fast_only: bool = False) -> str:
+    """Rule-based priority fallback used when no LLM is available.
+
+    fast_only=True applies only the unambiguous fast path (breaking + news outlet)
+    and leaves everything else empty so the LLM pass can fill it in.
+    """
+    t = (item.title or "") + " " + (item.summary or "")
+    is_news = bool(_NEWS_SOURCE_RE.search(item.source or ""))
+    has_strong = any(kw.lower() in t.lower() for kw in _P0_STRONG_KW)
+    has_weak = any(kw.lower() in t.lower() for kw in _P0_WEAK_KW)
+
+    if has_strong and is_news:
+        return "P0"
+    if fast_only:
+        return ""
+    if has_weak and is_news:
+        return "P1"
+    return "P2"
+
+
 def final_llm_selection(items: list[Item], target: int = 20) -> list[Item]:
     """
     Final LLM semantic selection: pick exactly `target` items most relevant
@@ -506,9 +711,16 @@ def final_llm_selection(items: list[Item], target: int = 20) -> list[Item]:
         source = item.source or "-"
         items_text += f"{i + 1}|{source}|[{tags}]|{title}\n"
 
-    user_prompt = f"""From the {len(items)} items below, select the {target} MOST relevant for a user interested in: AI tools/models, design software (C4D/Unity/Blender), investment/finance (gold/stocks/funds), productivity tools, digital sovereignty, big tech companies, retro-futurism/scifi art.
+    user_prompt = f"""From the {len(items)} items below, select exactly {target} for a news briefing for a user interested in: AI tools/models, design software (C4D/Unity/Blender), investment/finance (gold/stocks/funds), productivity tools, digital sovereignty, big tech companies, retro-futurism/scifi art.
 
-For each selected item, write its NUMBER. List ALL {target} numbers, one per line.
+EXCLUDE all of the following even if they match an interest:
+- Stock-forum chatter / 个股吹票 (雪球 stock tips, "会不会是价值投资的又一经典之作", personal portfolio opinions)
+- Celebrity gossip / 明星八卦 / 小道消息
+- Tutorial marketing / 教程营销 or content-农场 filler with no information gain
+- Personal essays without analytical value ("我每天陪老板搓AI玩具" style storytelling)
+If fewer than {target} items genuinely qualify, select fewer — do NOT pad with excluded types.
+
+For each selected item, write its NUMBER. List ALL selected numbers, one per line.
 
 Items:
 {items_text}"""
@@ -733,6 +945,9 @@ def evaluate_items(skip_llm: bool = False, target_selection: int = 20) -> list[I
     print(f"[Evaluator] {len(final)} items passed rule/LLM, filtering to {target_selection}...")
     if len(final) > target_selection:
         final = final_llm_selection(final, target=target_selection)
+
+    # Semantic priority (P0–P3) for exactly the rendered set — one LLM batch.
+    final = assign_semantic_priorities(final)
 
     # Save final selection back to items.jsonl (overwrite with only selected items)
     items_file = Path(__file__).parent.parent / "data" / "items.jsonl"

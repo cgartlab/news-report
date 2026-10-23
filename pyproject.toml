@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "news-report"
-version = "0.8.0"
+version = "0.9.1"
 description = "Modular news-gathering Agent Skill — Python pipeline for RSS/search collection, LLM evaluation, and report generation"
 requires-python = ">=3.10"
 license = { text = "CC BY-NC-SA 4.0" }
@@ -27,7 +27,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff>=0.8.0", "mypy>=1.10", "pre-commit>=3.8"]
+dev = ["ruff>=0.8.0", "mypy>=1.10", "pre-commit>=3.8", "pytest>=8.0"]
 telegram = ["telethon>=1.36"]
 
 [project.scripts]

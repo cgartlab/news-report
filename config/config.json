@@ -9,6 +9,7 @@
   "output_format": "telegram_markdown",
   "telegram_script_path": "",
   "enabled_sources": {
+    "miniflux": true,
     "rss": true,
     "zhihu": true,
     "search": false,
@@ -26,6 +27,10 @@
     "xhs": "XHS auth not configured",
     "x_browser": "CDP Edge not running — start with bin/edge-cdp.ps1 or bin/edge-cdp.sh"
   },
+  "miniflux_hours": 24,
+  "miniflux_limit": 100,
+  "miniflux_per_feed_limit": 5,
+  "miniflux_categories": [],
   "zhihu_cli_path": "",
   "zhihu_include_hot": true,
   "twitter_cli_path": "",

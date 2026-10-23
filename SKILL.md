@@ -1,6 +1,6 @@
 ---
 name: news-report
-version: 0.7.1
+version: 0.9.1
 description: >-
   Modular news-gathering skill that retrieves news and articles across pluggable
   information sources (Miniflux RSS via the miniflux-mcp MCP server is module 01),
@@ -98,6 +98,46 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 
 > 本节完整保留原 miniflux-mcp-skill 的集成内容。其中上游 npm 包名 `miniflux-mcp`、MCP 服务器名 `miniflux-mcp`、`MINIFLUX_*` 环境变量与本地安装目录 `~/.config/opencode/miniflux-mcp-server` 均属本模块配置，**保持不变**。
 
+### 两条接入路径（按场景选）
+
+| 路径 | 用在哪 | 实现 |
+|---|---|---|
+| **A. 采集器（pipeline 用这条）** | `src/main.py --full` 的采集阶段 | `src/collect_miniflux.py`，直接调 Miniflux REST API |
+| **B. MCP 服务器（对话用这条）** | 在对话里浏览分类/订阅/搜索文章 | `miniflux-mcp`（见下文「配置 MCP 服务器」） |
+
+**为什么采集器不走 MCP**：pipeline 需要在一次运行里拿到跨全部订阅源的近期条目。MCP 是面向单次对话查询的工具接口，逐源调用会产生 N 次往返；REST API 的 `/v1/entries` 一次请求即可覆盖所有 feed。
+
+### A. 采集器：`src/collect_miniflux.py`
+
+一次 API 请求拉取**全部已订阅 feed** 的近期条目，替代逐个抓取 RSS。
+
+```bash
+# 独立运行（适合排查）
+python src/collect_miniflux.py
+```
+
+环境变量（见 `.env.example`）：
+
+| 变量 | 说明 |
+|---|---|
+| `MINIFLUX_URL` | 实例地址，默认 `https://miniflux.cgartlab.com` |
+| `MINIFLUX_API_KEY` | **推荐**。API Key 作 Basic Auth 密码，用户名任意（Miniflux 官方推荐方式）。获取：网页 → Settings → API Keys |
+| `MINIFLUX_USERNAME` / `MINIFLUX_PASSWORD` | 无 API Key 时的退路（Basic Auth 用户名密码） |
+
+配置项（`config/config.json`）：
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `enabled_sources.miniflux` | `true` | 总开关 |
+| `miniflux_hours` | `24` | 只取该时间窗内的条目（`published_after`） |
+| `miniflux_limit` | `100` | 跨全部 feed 的条数上限 |
+| `miniflux_per_feed_limit` | `5` | **单源上限**，见下方说明 |
+| `miniflux_categories` | `[]` | 只保留这些分类（`TECH` / `AI` / `NEWS` / `Blog` / `Design` / `CGI` / `Invest`），空数组=不过滤 |
+
+**为什么必须有 `per_feed_limit`**：实测该实例 85 个订阅源、24 小时内 459 条未读，但 IT之家 一家就占 182 条。不加单源上限时，最终 300 条里 IT之家占 182；设 `5` 后降到 5，覆盖来源数从 14 升到 27。**这是让信息源多样化真正生效的关键参数**，不是可选优化。
+
+输出字段与其他采集器一致（`id` 前缀 `mf_`、`source_type: "rss"`），因此下游评估/去重/渲染无需改动。
+
 将 [Miniflux](https://miniflux.app) RSS 阅读器接入 AI Agent：通过 [miniflux-mcp](https://github.com/tan-yong-sheng/miniflux-mcp) MCP 服务器，在对话中直接浏览分类与订阅源、搜索文章、查看未读与星标，无需切换到浏览器。
 
 ### 前置条件
@@ -105,6 +145,10 @@ news-report 将每个信息源封装为独立模块，避免与单一服务绑�
 - 一个可访问的 Miniflux 实例（自托管或托管），且已登录
 - Node.js **>= 18.17**（miniflux-mcp 依赖全局 `fetch`）
 - 在 opencode 中注册 miniflux-mcp MCP 服务器（见下）
+
+### B. MCP 服务器（对话侧）
+
+以下为**对话中**浏览分类 / 订阅 / 搜索文章用的 MCP 配置，与上面的采集器互不影响。
 
 ### 配置 MCP 服务器
 
@@ -829,6 +873,19 @@ fetch feed from "https://example.com/feed.xml" with limit 10
 
 最多 3 个，宁少不多。
 
+### 低价值剔除（v0.9.0 起）
+
+高价值由读者兴趣反推：AI/设计/投资/生产力/数字主权/大科技/复古科幻。
+与之无关且无认知增量的内容一律剔除，规则层对标题强信号直接 discard：
+
+- 明星八卦：`明星|八卦|绯闻|恋情|出轨|塌房|私生活|狗仔`
+- 小道消息：`网传|传闻|爆料|知情人士|据传|小道消息`
+- 星座玄学：`星座|运势|占卜|塔罗|风水`
+- 鸡汤成功学：`心灵鸡汤|成功学|养生秘方|排毒|冥想速成`
+
+弱信号（`离婚|疑似|减肥|穿搭|饭圈` 等）降分不直接杀，避免误伤正文里
+顺带提及的科技报道。
+
 ## 状态存储与冷却机制（跨简报去重）
 
 > **v0.7.0 新增。** 参考 news-aggregator 的 alert cooldown 和 news-pipeline-n8n 的事件签名机制。目的：同一事件在 24 小时内已推送，即使有新信源出现也不重复推送，避免早报刷屏。
@@ -896,7 +953,10 @@ python3 scripts/cooldown_check.py prune
 
 > **v0.3.0 正式定义。** Agent 直接路径按本节模板排版；脚本路径由 `src/report.py` 自动生成。模板设计原则：**信息密度最大化、阅读体验最优化、节奏从冲击到沉静的叙事弧**。
 >
-> **⚠️ v0.7.0 补充说明**：本节模板是**代码路径的自动化排版模板**（TOP SIGNAL / 优先级分区 / 影响分析 / 示例），由 `src/report.py` 消费。Agent **对话直跑模式**（老板要求生成日报/早报时）应使用运行时 skill `~/.hermes/skills/news-report/SKILL.md` 里的【输出模板】章节，其中每条新闻必须带本文档前几节定义的 5 个元数据字段（Significance / Development Status / Key Entities / Sentiment / Data Quality），并在结尾调用 `scripts/cooldown_check.py push` 记录事件签名。两条路径产出内容不同：本节的 TOP SIGNAL + 影响分析 + 职业风险矩阵适合长版深度分析，运行时模板适合 Telegram 友好的日常简报。
+> **⚠️ v0.7.0 补充说明（2026-10-23 校正）**：本节是**长版深度分析模板**（TOP SIGNAL / 优先级分区 / 影响分析 / 职业风险矩阵），用于 Agent 在对话里手工生成长文简报。
+> **`src/report.py` 并不渲染本节模板** —— 它输出的是 `📰 NEWS REPORT` 简版：header（采集量 / 精选量 / 优先级计数）→ 🔴🟡🟢🔵 四区 → 📊 来源统计，单条格式见下文「单条模板」。
+> Agent **对话直跑模式**（老板要求生成日报/早报时）应使用运行时 skill 里的【输出模板】章节，每条新闻带本文档前几节定义的 5 个元数据字段（Significance / Development Status / Key Entities / Sentiment / Data Quality），并在结尾调用 `scripts/cooldown_check.py push` 记录事件签名。
+> 三条路径产出的内容不同：本节长版适合深度分析，`src/report.py` 简版适合脚本/定时批量，运行时模板适合 Telegram 日常简报。**改本节模板不会影响 `src/report.py` 的输出**，反之亦然。
 
 ### 设计原则
 
@@ -981,10 +1041,61 @@ python3 scripts/cooldown_check.py prune
 | 级别 | 标识 | 格式 | 条件 |
 |------|------|------|------|
 | **TOP SIGNAL** | 🎯 | 标题 + 洞察 + 链接 + 来源 + 阅读时间 | 当日最具格局重塑意义的单条新闻 |
-| **紧急** | 🔴 P0 | 序号 + 标题 + 💡洞察 + 来源 + 链接 | 突发/重大/格局重塑级事件 |
-| **关注** | 🟡 P1 | 序号 + 标题 + 来源 + 链接 | 重要发布/里程碑/行业拐点 |
-| **常规** | 🟢 P2 | 序号 + 标题 + 来源（单行） | 有价值的日常信息 |
-| **背景** | 🔵 P3 | 序号 + 标题 + 来源（单行，无链接） | 低优先级/参考信息 |
+| **紧急** | 🔴 P0 | 标题(链接) + 140字摘要 + 来源 | **语义判定**（见下）：可能危及人身安全 / 重大技术变革 / 影响人类历史的信号 / 市场剧烈变动 / 革命性产品发布 |
+| **关注** | 🟡 P1 | 标题(链接) + 140字摘要 + 来源 | 高度相关、有实质价值但未达 P0 的重大程度 |
+| **常规** | 🟢 P2 | 标题(链接) + 140字摘要 + 来源 + 日期 | 有价值的日常信息；**单源 ≤3 条**（超出降级到 🔵 背景） |
+| **背景** | 🔵 P3 | 标题(链接) + 来源 + 日期（单行速记） | 低优先级/参考信息 |
+
+> **P0 判定标准（语义，非关键词）**：P0 只给真正重大的信号，宁缺毋滥——
+> ① 可能危及人身安全；② 重大技术变革；③ 可能影响人类历史的信号；
+> ④ 市场剧烈变动信号；⑤ 伟大革命性产品发布。
+> 由评估阶段 LLM 批量判定（`evaluator.assign_semantic_priorities`），报告层只消费
+> 结果、不靠关键词猜。规则兜底仅限「新闻源 + 明确突发词」才给 P0，
+> 博客/论坛等非新闻源一律不因关键词进入 P0。
+
+### 低价值剔除（反推自高价值）
+
+**高价值 = 符合读者兴趣**：AI 工具/模型、设计软件（C4D/Unity/Blender）、
+投资/金融（黄金/股票/基金）、生产力工具、数字主权、大科技公司、复古未来/科幻艺术。
+
+**低价值 = 与以上无关且无认知增量**：明星八卦、小道消息/未经证实传闻、星座运势、
+心灵鸡汤、内容农场。规则层对标题命中强负面信号（`明星|八卦|绯闻|网传|爆料|星座|鸡汤` 等）
+直接 discard；弱信号降分。LLM 层在评估指令中一并排除。
+
+### 单条模板（脚本路径 `src/report.py` 消费）
+
+```
+[标题 ≤100字](原文链接)
+  {摘要 ≤140字}（句子边界截断 + …）
+  📡 {来源} · {日期}
+```
+
+- 每条**必须**内嵌真实原文链接；无链接才裸标题
+- 摘要 140 字：足够判断是否值得打开，信息密度最大化
+- **四条渲染路径（P0/P1/P2/P3）共用同一元信息行**（`📡 {来源} · {日期}`）；P3 只省掉摘要，仍保留链接与日期
+- **摘要预算只算正文**：HTML 残留空格、前置样板（见下）在截断前清掉，140 字全部用来装信息
+
+### 前置样板清洗（采集层，`src/collect_rss._strip_noise`）
+
+Feed 摘要开头的页面装饰会吃掉 15-20 字的摘要预算，而它们携带的信息元信息行已经有了：
+
+| 样板形态 | 处理 |
+|---|---|
+| `感谢IT之家网友 猫言喵语 的线索投递！` | 删除（投稿署名） |
+| `IT之家 10 月 20 日消息，` | 删除（来源 + 日期在元信息行） |
+| `业界消息 2026/10/20 青小蛙 ` | 删除（栏目名 + 裸日期 + 作者，仅限开头 8 字内） |
+| 开头残留 `。` / `；` 等（上游截断句子） | 删除 |
+
+正文中间出现的日期（`报道指出，2026/10/20 当天…`）不做处理——只清 lede。
+
+### 中文排版（`src/textclean.py`）
+
+HTML 去标签时内联标签（`<span>` `<a>` `<strong>`）必须直接消失，替换成空格会把
+`华为鸿蒙` 变成 `华为 鸿蒙`、`万台，` 变成 `万台 ，`。采集层与渲染层都会过一遍
+`normalize_cjk_spacing`：
+
+- 中文字符之间的空格删除；中文 / 全角标点前后的空格删除；零宽字符删除；连续空白折叠
+- **保留**中文与数字 / 英文之间的单个空格（`9,500 万台`、`Mac 版 Perplexity`）——这是合法排版，不是脏数据
 
 ### 排版细则
 
@@ -993,9 +1104,10 @@ python3 scripts/cooldown_check.py prune
 3. **洞察限长**：💡 洞察 ≤80 字符，回答"so what?"
 4. **来源标识**：统一用 `📡 {来源名}` 格式
 5. **链接处理**：标题本身可内嵌链接，元数据行独立链接
-6. **空白控制**：P0/P1 条目间空一行；P2/P3 无空行；章节间一个空行
+6. **空白控制**：P0/P1/P2 条目间空一行（每条三行，不留空行会糊成一片）；P3 单行密排；章节间一个空行
 7. **分隔线**：章节标题用 `━━━` (em dash)，header/footer 用 `════` (double em dash)
 8. **编码**：全文 UTF-8，中文标点，英文标点仅在代码/URL 中
+9. **来源多样性**：🟢 P2 内同一来源最多 3 条（`report.MAX_PER_SOURCE_P2`），超出降级到 🔵 背景而不是丢弃——单源淹没有实测依据：2026-10-21 那次 run 的 P2 共 11 条，其中 AWS 博客 4 条 + IT之家 5 条
 
 ### 影响分析指南
 
@@ -1104,7 +1216,9 @@ python3 scripts/cooldown_check.py prune
 
 ## 版本信息
 
-- **Skill 版本**：v0.8.0 —— 新增模块 06 · x-browser（X 时间线 · Edge CDP）：零依赖 CDP 客户端（`src/x_cdp.py`）、时间线采集器（`src/collect_x_browser.py`）、跨平台启动器（`bin/edge-cdp.ps1` / `bin/edge-cdp.sh`）；规划中占位模块重编号为 07（`rss-http`）与 08（`news-api`）；并同步了版本信息口径（此前 SKILL.md 停留在 v0.6.1，而 CHANGELOG 已到 0.7.1）。
+- **Skill 版本**：v0.9.1 —— 输出质量打磨版：中文排版清洗（`src/textclean.py`）、HTML 内联标签不再留空格、摘要前置样板（`感谢…线索投递` / `X 月 X 日消息` / 栏目名+裸日期）与 Markdown 强调符残留清除；四条渲染路径统一 `📡 来源 · 日期` 元信息行、🔵 背景补链接、P2 单源上限 3 条、条目间距修正；发布链路改为仓库内 composite action（不再依赖私有 reusable workflow）。
+  - v0.9.0 —— P0 语义判定（评估阶段 LLM 批量判 P0-P3，五条语义标准）+ 统一 140 字单条模板（标题内嵌真实链接）+ 低价值内容剔除（明星八卦 / 小道消息 / 星座鸡汤，按高价值兴趣反推）+ 修复 `{{ postmeta.* }}` 占位符残留。
+  - v0.8.0 —— 新增模块 06 · x-browser（X 时间线 · Edge CDP）：零依赖 CDP 客户端（`src/x_cdp.py`）、时间线采集器（`src/collect_x_browser.py`）、跨平台启动器（`bin/edge-cdp.ps1` / `bin/edge-cdp.sh`）；规划中占位模块重编号为 07（`rss-http`）与 08（`news-api`）；并同步了版本信息口径（此前 SKILL.md 停留在 v0.6.1，而 CHANGELOG 已到 0.7.1）。
   - v0.7.1 —— 修复失效链接 + Contract 表补「本地中间文件」行（CHANGELOG 已记录，SKILL.md 版本信息此前未同步）。
   - v0.7.0 —— 元数据字段体系（5 字段强制标注）、打分细则、状态存储与冷却机制、输出模板双路径（CHANGELOG 已记录，SKILL.md 版本信息此前未同步）。
   - v0.6.0 —— 新增模块 05 · xiaohongshu-cli（小红书 CLI），接入笔记搜索、热门榜（多分类）、推荐 Feed 与话题。
