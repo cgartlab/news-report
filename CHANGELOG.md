@@ -7,6 +7,19 @@
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **发布流程内联（`.github/actions/publish`）**：`publish.yml` 不再调用 `cgartlab/cgartlab-skills` 的 reusable workflow。跨仓库 reusable workflow 只在「调用方与被调用方同为 private」时可用，本仓库一旦转 public（当前 private 仓库的 Actions 因账户账单不可用）发布 job 会直接失败。现改为仓库自带 composite action，与本工作区其余 skill 仓库（cgartlab-search / down / person-profile / quill）保持同一套实现。
+- 手动 dispatch 增加 `publish_clawhub` / `publish_skillhub` 单侧补发开关（发布半途失败时只补发另一侧）；SkillHub 侧会自动剔除无扩展名文件（`LICENSE` / `Dockerfile`），License 声明仍保留在 SKILL.md。
+
+### Fixed
+
+- **`src/evaluator.py` 未通过 `ruff format`**：CI 的 `ruff format --check src/` 会失败。仅格式调整（切片空格、长行换行、print 换行），无行为变化。
+
+---
+
 ## [0.9.0] - 2026-10-21 _(无 tag)_
 
 > **一句话概括**：这是一次**输出质量与评估链路重构**更新。P0 判定从「关键词猜测」改为「LLM 语义判定」（人身安全 / 重大技术变革 / 影响历史 / 市场剧烈变动 / 革命性产品）；统一单条模板（标题内嵌真实链接 + 140 字摘要 + 来源）；按高价值兴趣反推剔除低价值内容（明星八卦 / 小道消息 / 星座鸡汤）；修复 `{{ postmeta.* }}` 模板占位符残留。
