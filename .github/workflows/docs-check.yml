@@ -11,6 +11,9 @@ on:
     paths:
       - "*.md"
       - ".github/**"
+  # 手动跑：没有 PR 时（例如分支刚推上去、或 PR 创建时 Actions 被计费停摆）
+  # 也能校验文档门禁，不用为了触发检查去造一次提交。
+  workflow_dispatch:
 
 jobs:
   docs-check:
