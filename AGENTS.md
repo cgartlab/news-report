@@ -8,10 +8,10 @@
 
 ## 项目定位与边界
 
-- 本仓库是 **news-report**：模块化信息源驱动的新闻采集（news-gathering）Agent Skill（文档型仓库），前身为 miniflux-mcp-skill。
+- 本仓库是 **news-report**：模块化信息源驱动的新闻采集（news-gathering）Agent Skill，前身为 miniflux-mcp-skill。仓库由**文档本体**（SKILL.md 及各贡献规则）+ **Python 流水线**（`src/`，采集 → 去重 → LLM 评估 → 排版）两部分组成，两条路径产出的简报形态不同。
 - **只读采集**：Skill 只从信息源检索 / 整理数据，不写业务输出文件、不改信息源数据。
-- **输出格式已定义**：v0.3.0 起 SKILL.md 包含「输出模板」章节，定义了新闻简报的完整格式（TOP SIGNAL → 紧急 → 关注 → 常规 → 背景 → 影响分析 → 来源统计）。新增内容应遵循该模板，修改模板需同步 CHANGELOG。
-- **信息源模块化**：每个信息源是独立模块。当前唯一可用模块为 **模块 01 · miniflux**（内容在 SKILL.md 中完整保留）；`rss-http`、`news-api` 仅为注册表占位，状态为「规划中」——**不得为占位模块编造已实现的工具名 / 命令 / 配置**，相关能力一律标注「待下阶段」。
+- **输出格式已定义**：SKILL.md「输出模板」章节区分两套形态——**长版深度模板**（TOP SIGNAL → 紧急 → 关注 → 常规 → 背景 → 影响分析 → 来源统计，供 Agent 对话手工生成）与 **`src/report.py` 简版**（`📰 NEWS REPORT`：header → 🔴🟡🟢🔵 四区 → 来源统计）。单条格式统一为「标题(链接) + ≤140 字摘要 + `📡 来源 · 日期`」。新增内容应遵循对应模板，修改任一方需同步 CHANGELOG 与 SKILL.md。
+- **信息源模块化**：每个信息源是独立模块。**模块 01-06 均已实现**（01 miniflux、02 zhihu-search 默认启用；03 twitter-cli、04 bilibili-cli、05 xiaohongshu-cli、06 x-browser 需凭证或 CDP 浏览器，默认关闭）；`rss-http`、`news-api` 仅为注册表占位（模块 07 / 08，状态「规划中」）——**不得为占位模块编造已实现的工具名 / 命令 / 配置**，相关能力一律标注「待下阶段」。
 
 ## 启动清单（动手前）
 
@@ -31,19 +31,20 @@
 | 文档 bug 修复 | 定位 → 对照来源核实 → 修改 → 保留原文细节再增补，不整段删除有效信息 |
 | 搜索资料完善 | 外部信息注明来源 URL；技术细节以官方文档 / 上游源码为准；存疑处标注「待验证」 |
 | 版本发布 | 按 SemVer 判断：bug 修复 / 文档补丁 → patch；新增模块 / 章节 / 定位变化 → minor；发布 tag 需用户明确指示 |
+| 发布到 ClawHub / SkillHub | 先 `gh workflow run publish.yml -f dry_run=true` 验证双市场预检，再打 tag；SkillHub 拒收无扩展名文件（LICENSE/Dockerfile 自动剔除），授权声明必须写在 SKILL.md 正文 |
 
 ## 关键约束
 
 1. **密钥只走本地环境变量**：示例一律用 `${VAR}` 占位；绝不硬编码真实 API key / token，不得写入输出文件、配置样本或提交历史。
 2. **终端示例必须可直接执行**：给出可复制命令 / 脚本并注明平台（Linux / macOS / Windows PowerShell），平台差异分别写出。
-3. **文档改动同步 CHANGELOG**：改名、定位变化、新增 / 删除模块、结构或约定变更，必须在 CHANGELOG.md 加对应条目（Keep a Changelog 风格）；版本号同步更新于 SKILL.md「版本信息」、本文件「版本」段与 CHANGELOG 顶部三处。
+3. **文档改动同步 CHANGELOG**：改名、定位变化、新增 / 删除模块、结构或约定变更，必须在 CHANGELOG.md 加对应条目（Keep a Changelog 风格）；版本号需在**五处**保持一致（SKILL.md frontmatter、SKILL.md「版本信息」、`pyproject.toml`、CHANGELOG 顶部、本文件「版本」段），否则 `docs-check` 与 `release` 门禁都会失败。
 4. **禁止越界**：只修改本仓库（news-report/）内容，不触碰其他目录；默认不 push、不打 tag / release、不 merge；确需时另行明确指示。
 5. **文档一致性**：SKILL.md（技能本体）、README.md（对外简介）、AGENTS.md（本文件）与 CHANGELOG.md 描述的行为必须一致；SKILL.md 是核心资产，修订时保留既有实用细节（参数表、排障条目等勿删减）。
 
 ## 质量门禁（改动后自检）
 
 - **代码块配平**：改动后确认各 .md 中的三反引号（代码块标记）出现次数为偶数。
-- **版本一致**：SKILL.md / AGENTS.md / CHANGELOG.md 中的版本引用一致。
+- **版本一致（五处）**：SKILL.md frontmatter `version:`、SKILL.md 正文 `**Skill 版本**：vX.Y.Z`、`pyproject.toml` 的 `version`、CHANGELOG 最新的 `## [X.Y.Z]`、本文件 `**项目版本**：vX.Y.Z` —— 由 `.github/workflows/docs-check.yml` 硬门禁，别只改三处。
 - **无占位工具名残留**：规划中模块章节不得出现可被误调用的「工具名」。
 - **技术论断可溯源**：每条排障 / 参数 / 行为说明有来源，不编造；存疑处标注「待验证」。
 - **示例可执行**：新增命令均已按平台验证（或明确标注示意、非可执行）。
@@ -71,6 +72,10 @@
 | `README.md` | 对外简介（模块化定位、指向 SKILL.md、许可证） |
 | `AGENTS.md` | 本文件：AI 贡献者约束（定位、启动清单、任务原则、质量门禁、提交规范） |
 | `CHANGELOG.md` | 版本历史（Keep a Changelog + SemVer） |
+| `LESSONS.md` | 从真实失误沉淀的「教训 → 规则」清单，会话开始先读 |
+| `src/` | Python 流水线：`collect_*.py` 采集、`deduplicator.py` 去重、`evaluator.py` 评估与 P0-P3 判定、`report.py` 排版、`textclean.py` 中文排版/样板/残留清洗、`x_cdp.py` CDP 客户端 |
+| `tests/` | pytest（清洗、评估规则、渲染、CDP） |
+| `.github/actions/publish/action.yml` | 发布到 ClawHub / SkillHub 的 composite action（内联，不依赖跨仓库 reusable workflow） |
 | `LICENSE` | CC BY-NC-SA 4.0 |
 
 ## 版本
