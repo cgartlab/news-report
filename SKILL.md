@@ -1,6 +1,6 @@
 ---
 name: news-report
-version: 0.9.0
+version: 0.9.1
 description: >-
   Modular news-gathering skill that retrieves news and articles across pluggable
   information sources (Miniflux RSS via the miniflux-mcp MCP server is module 01),
@@ -1216,7 +1216,8 @@ HTML 去标签时内联标签（`<span>` `<a>` `<strong>`）必须直接消失�
 
 ## 版本信息
 
-- **Skill 版本**：v0.9.0 —— P0 语义判定（评估阶段 LLM 批量判 P0-P3，五条语义标准）+ 统一 140 字单条模板（标题内嵌真实链接）+ 低价值内容剔除（明星八卦 / 小道消息 / 星座鸡汤，按高价值兴趣反推）+ 修复 `{{ postmeta.* }}` 占位符残留。
+- **Skill 版本**：v0.9.1 —— 输出质量打磨版：中文排版清洗（`src/textclean.py`）、HTML 内联标签不再留空格、摘要前置样板（`感谢…线索投递` / `X 月 X 日消息` / 栏目名+裸日期）与 Markdown 强调符残留清除；四条渲染路径统一 `📡 来源 · 日期` 元信息行、🔵 背景补链接、P2 单源上限 3 条、条目间距修正；发布链路改为仓库内 composite action（不再依赖私有 reusable workflow）。
+  - v0.9.0 —— P0 语义判定（评估阶段 LLM 批量判 P0-P3，五条语义标准）+ 统一 140 字单条模板（标题内嵌真实链接）+ 低价值内容剔除（明星八卦 / 小道消息 / 星座鸡汤，按高价值兴趣反推）+ 修复 `{{ postmeta.* }}` 占位符残留。
   - v0.8.0 —— 新增模块 06 · x-browser（X 时间线 · Edge CDP）：零依赖 CDP 客户端（`src/x_cdp.py`）、时间线采集器（`src/collect_x_browser.py`）、跨平台启动器（`bin/edge-cdp.ps1` / `bin/edge-cdp.sh`）；规划中占位模块重编号为 07（`rss-http`）与 08（`news-api`）；并同步了版本信息口径（此前 SKILL.md 停留在 v0.6.1，而 CHANGELOG 已到 0.7.1）。
   - v0.7.1 —— 修复失效链接 + Contract 表补「本地中间文件」行（CHANGELOG 已记录，SKILL.md 版本信息此前未同步）。
   - v0.7.0 —— 元数据字段体系（5 字段强制标注）、打分细则、状态存储与冷却机制、输出模板双路径（CHANGELOG 已记录，SKILL.md 版本信息此前未同步）。
