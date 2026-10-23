@@ -13,6 +13,17 @@
 
 - **发布流程内联（`.github/actions/publish`）**：`publish.yml` 不再调用 `cgartlab/cgartlab-skills` 的 reusable workflow。跨仓库 reusable workflow 只在「调用方与被调用方同为 private」时可用，本仓库一旦转 public（当前 private 仓库的 Actions 因账户账单不可用）发布 job 会直接失败。现改为仓库自带 composite action，与本工作区其余 skill 仓库（cgartlab-search / down / person-profile / quill）保持同一套实现。
 - 手动 dispatch 增加 `publish_clawhub` / `publish_skillhub` 单侧补发开关（发布半途失败时只补发另一侧）；SkillHub 侧会自动剔除无扩展名文件（`LICENSE` / `Dockerfile`），License 声明仍保留在 SKILL.md。
+- **输出模板真正统一（四条路径共用元信息行）**：🟡 P1 此前只有 `📡 来源`、没有日期，而同一条数据在 🟢 P2 却带日期——v0.9.0 声称的「统一单条模板」实际只覆盖 P2。现在 P0/P1/P2/P3 全部输出 `📡 {来源} · {日期}`。
+- **🔵 背景条目可点击**：P3 此前是裸标题 + 来源，读者无法打开；现输出 `[标题](链接)  📡 来源 · 日期`。
+- **🟢 P2 条目间空行**：每条是「标题 / 摘要 / 元信息」三行，不留空行会糊成一片。
+- **来源多样性上限**：🟢 P2 内同一来源最多 3 条（`report.MAX_PER_SOURCE_P2`），超出降级到 🔵 背景而非丢弃。实测依据：2026-10-21 那次 run 的 P2 共 11 条，AWS 博客独占 4 条、IT之家 5 条。
+
+### Added
+
+- **`src/textclean.py`（中文排版清洗）**：`normalize_cjk_spacing` 删除中文字符之间、中文/全角标点旁的多余空格，删零宽字符，折叠连续空白；保留中文与数字/英文之间的合法空格（`9,500 万台`、`Mac 版 Perplexity`）。采集层（`_strip_noise` 出口）与渲染层（标题、摘要）各过一遍。
+- **HTML 去标签按块级/内联区分**（`collect_rss._strip_html`）：内联标签（`span` / `a` / `strong` …）直接删除，块级标签才留一个空格。此前每个标签都被替换成空格，是 `华为 鸿蒙 HarmonyOS`、`万台 ，` 这类脏排版的根因。
+- **摘要前置样板清洗**（`collect_rss._strip_noise`）：`感谢…线索投递！`、`IT之家 10 月 20 日消息，`、`业界消息 2026/10/20 青小蛙 `、开头残留的 `。；` 一律删除——它们吃掉 15-20 字摘要预算，信息却已由元信息行承担。正文中间的同形日期不处理。
+- 测试 `tests/test_output_polish_2026_10.py` 新增 23 条，覆盖中文排版、内联/块级标签、三类前置样板、「正文日期不被误删」、模板统一、P3 链接与单源上限。
 
 ### Fixed
 

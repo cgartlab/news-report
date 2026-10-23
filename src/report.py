@@ -24,8 +24,16 @@ from evaluator import (  # noqa: E402,F401
     _P0_WEAK_KW,
     Item,
 )
+from textclean import normalize_cjk_spacing  # noqa: E402
 
 SKILL_DIR = Path(__file__).parent.parent
+
+# Cap on how many curated items one source may occupy in 🟢 常规 (P2). A single
+# high-volume feed (AWS ML blog, IT之家) otherwise crowding out every other
+# source: measured on the 2026-10-21 run, P2 held 4 AWS posts + 5 IT之家 posts
+# out of 11. Overflow is demoted to 🔵 背景 rather than dropped, so nothing is
+# silently lost.
+MAX_PER_SOURCE_P2 = 3
 
 
 def _is_aggregate_title(title: str) -> bool:
@@ -150,6 +158,8 @@ def render_title(item: Item) -> str:
     display_title = re.sub(r"\*\*(.+?)\*\*", r"\1", display_title)
     # Remove extra `markdown` backticks
     display_title = re.sub(r"`(.+?)`", r"\1", display_title)
+    # Chinese typography dirt ("华为 鸿蒙") — see src/textclean.py.
+    display_title = normalize_cjk_spacing(display_title)
     # Limit to 100 chars for readability
     if len(display_title) > 100:
         cut = display_title[:100].rfind(" ")
@@ -161,7 +171,9 @@ def _summary_140(item: Item) -> str:
     """Trim the summary to ~140 display characters, cutting at a sentence or word
     boundary and appending an ellipsis. Chosen so each item tells the reader
     enough to decide whether to open it — dense but scannable."""
-    raw = (item.summary or "").strip()
+    # Normalise before measuring, so the 140-char budget buys real content
+    # instead of the spaces left behind by HTML tag removal.
+    raw = normalize_cjk_spacing((item.summary or "").strip())
     if not raw:
         return ""
 
@@ -184,53 +196,51 @@ def _summary_140(item: Item) -> str:
     return raw[:cut].rstrip() + "…"
 
 
-def render_item_p1_p0(item: Item) -> str:
-    """Render item with summary + inline link (P0/P1 format)."""
-    title = render_title(item)
+def _linked_title(item: Item) -> str:
+    """Title with the real article URL inlined; bare title only when there is no link."""
     url = item.url if item.url and item.url not in ("", "（无链接）") else ""
-    source_label = f"📡 {item.source}"
-
-    # Inline link in title
-    link_title = f"[{title}]({url})" if url else title
-
-    # Summary (~140 chars for group chat)
-    summary = _summary_140(item)
-
-    lines = [link_title]
-    if summary:
-        lines.append(f"  {summary}")
-    lines.append(f"  {source_label}")
-
-    return "\n".join(lines)
-
-
-def render_item_p2(item: Item) -> str:
-    """Render item with title + summary + source (P2 also gets the same shape)."""
     title = render_title(item)
-    url = item.url if item.url and item.url not in ("", "（无链接）") else ""
+    return f"[{title}]({url})" if url else title
+
+
+def _meta_line(item: Item) -> str:
+    """The one meta line every zone shares: `📡 {来源} · {日期}`.
+
+    P1 used to stop at the source, so the same item showed a date in P2 and no
+    date in P1 — the v0.9.0 "统一单条模板" claim was only true for P2.
+    """
+    parts = []
+    source = normalize_cjk_spacing((item.source or "").strip())
+    if source:
+        parts.append(f"📡 {source}")
     date_str = item.date[:10] if item.date else ""
-    source_label = f"📡 {item.source}"
+    if date_str:
+        parts.append(date_str)
+    return "  " + " · ".join(parts) if parts else ""
 
-    link_title = f"[{title}]({url})" if url else title
 
-    lines = [link_title]
+def render_item_with_summary(item: Item) -> str:
+    """P0/P1/P2 shape: linked title + ≤140-char summary + meta line."""
+    lines = [_linked_title(item)]
     summary = _summary_140(item)
     if summary:
         lines.append(f"  {summary}")
-
-    meta_parts = []
-    if date_str:
-        meta_parts.append(date_str)
-    meta_parts.append(source_label)
-    lines.append("  " + " · ".join(meta_parts))
+    meta = _meta_line(item)
+    if meta:
+        lines.append(meta)
     return "\n".join(lines)
+
+
+# Historical names kept: the P0/P1 and P2 paths were separate functions before
+# the template was unified, and both are referenced by tests.
+render_item_p1_p0 = render_item_with_summary
+render_item_p2 = render_item_with_summary
 
 
 def render_item_p3(item: Item) -> str:
-    """Render item with title + source only (P3 format)."""
-    title = render_title(item)
-    source_label = f"📡 {item.source}"
-    return f"{title}  {source_label}"
+    """P3 shape: single line, linked title + meta (背景 items used to be dead text)."""
+    meta = _meta_line(item).strip()
+    return f"{_linked_title(item)}  {meta}" if meta else _linked_title(item)
 
 
 # ─── Report Generation ───────────────────────────────────────────────────────
@@ -275,6 +285,20 @@ def generate_report(items: list[Item], collected: int = 0, sources: int = 0) -> 
             p2_items.append(item)
         else:
             p3_items.append(item)
+
+    # 🟢 常规 diversity cap: one source may hold at most MAX_PER_SOURCE_P2 slots.
+    # Overflow moves to 🔵 背景 — nothing is dropped, it just stops crowding out
+    # every other source in the zone the reader scans first.
+    capped_p2: list[Item] = []
+    per_source: dict[str, int] = {}
+    for item in p2_items:
+        src = item.source or ""
+        if per_source.get(src, 0) >= MAX_PER_SOURCE_P2:
+            p3_items.append(item)
+            continue
+        per_source[src] = per_source.get(src, 0) + 1
+        capped_p2.append(item)
+    p2_items = capped_p2
 
     lines = []
 
@@ -331,7 +355,11 @@ def generate_report(items: list[Item], collected: int = 0, sources: int = 0) -> 
     if p2_items:
         lines.append("🟢 常规 (P2)")
         lines.append(SEPARATOR)
-        for item in p2_items:
+        for idx, item in enumerate(p2_items):
+            # Each P2 entry is three lines (title / summary / meta); without a
+            # blank line between entries they read as one wall of text.
+            if idx:
+                lines.append("")
             lines.append(render_item_p2(item))
         lines.append("")
 
