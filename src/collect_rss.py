@@ -11,6 +11,10 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+# noqa: E402 — import after sys.path bootstrap
+from textclean import normalize_cjk_spacing  # noqa: E402
+
 SKILL_DIR = Path(__file__).parent.parent
 
 
@@ -115,9 +119,36 @@ def _get_text(parent, tag_name: str) -> str:
     return el.text.strip() if el is not None and el.text else ""
 
 
+_BLOCK_TAG_RE = __import__("re").compile(
+    r"</?(?:p|div|br|li|ul|ol|tr|td|th|table|h[1-6]|section|article|header|footer"
+    r"|blockquote|figure|figcaption|hr|pre|dt|dd)\b[^>]*>",
+    __import__("re").IGNORECASE,
+)
+_INLINE_TAG_RE = __import__("re").compile(
+    r"</?(?:a|span|strong|em|b|i|u|s|code|sub|sup|font|mark|small|abbr|cite|q|img"
+    r"|time|label|picture|source|del|ins|kbd|samp|var)\b[^>]*>",
+    __import__("re").IGNORECASE,
+)
+_ANY_TAG_RE = __import__("re").compile(r"<[a-zA-Z!/][^>]*>")
+
+# Lede boilerplate that costs 15-20 chars of the 140-char summary budget while
+# telling the reader nothing the meta line already carries (source + date):
+#   "IT之家 10 月 20 日消息，..."        → strip (date + source are in meta)
+#   "感谢IT之家网友 猫言喵语 的线索投递！" → strip (submission credits)
+_LEDE_THANKS_RE = __import__("re").compile(r"^感谢.{0,30}?(?:投递|提供|分享)[！!。，,]?\s*")
+_LEDE_DATELINE_RE = __import__("re").compile(
+    r"^(?:[^\s，。]{1,8}\s*)?\d{1,2}\s*月\s*\d{1,2}\s*日\s*消息[，,：:]?\s*"
+)
+# "业界消息 2026/10/20 青小蛙 10 月 19 日，<body>" — a section label + bare date
+# + author, all chrome. Only stripped in the first few chars, so a body that
+# mentions "2026/10/20" mid-sentence is untouched.
+_LEDE_SECTION_DATE_RE = __import__("re").compile(
+    r"^[^\s，。、；：！？]{0,8}\s*\d{4}/\d{1,2}/\d{1,2}\s+(?:[^\s]{1,8}\s+)?"
+)
+
+
 def _strip_html(text: str) -> str:
     import html
-    import re
 
     # Order matters. Unescape first so that escaped markup ("&lt;p&gt;...")
     # turns into real tags, then strip with a STRICT tag pattern that requires
@@ -125,8 +156,13 @@ def _strip_html(text: str) -> str:
     # literal comparisons: "a &lt; b &amp;&amp; c &gt; d" would collapse to "a d".
     text = html.unescape(text or "")
     text = html.unescape(text)  # second pass catches double-encoded entities
-    text = re.sub(r"<[a-zA-Z!/][^>]*>", " ", text)
-    text = re.sub(r"\s+", " ", text)
+    # Block tags are real boundaries (keep one space); inline tags are emphasis /
+    # wrappers and must vanish without a trace. Replacing every tag with a space
+    # is what produced "华为 鸿蒙 HarmonyOS 操作系统" in the briefing.
+    text = _BLOCK_TAG_RE.sub(" ", text)
+    text = _INLINE_TAG_RE.sub("", text)
+    text = _ANY_TAG_RE.sub("", text)
+    text = __import__("re").sub(r"\s+", " ", text)
     return text.strip()
 
 
@@ -227,6 +263,17 @@ def _strip_noise(summary: str, title: str = "") -> str:
     # "{{ postmeta.postlike }}"). They are render artifacts, never content.
     text = _TEMPLATE_PLACEHOLDER_RE.sub("", text).strip()
 
+    # Lede boilerplate (submission credits / dateline). Run before the marker
+    # pass: "感谢…线索投递！ IT之家 10 月 20 日消息，<body>" hides the body
+    # behind two prefixes.
+    for _ in range(3):
+        stripped = _LEDE_THANKS_RE.sub("", text, count=1)
+        stripped = _LEDE_DATELINE_RE.sub("", stripped, count=1)
+        stripped = _LEDE_SECTION_DATE_RE.sub("", stripped, count=1)
+        if stripped == text:
+            break
+        text = stripped.lstrip()
+
     # Shape 2: the headline is re-published inside the summary; the body follows it.
     if title:
         idx = text.rfind(title)
@@ -243,7 +290,7 @@ def _strip_noise(summary: str, title: str = "") -> str:
     # Bibliographic entries (豆瓣书籍) are pure metadata: "作者: X 出版社: Y 出版年: Z".
     # Running the marker pass on them would delete the actual content.
     if _BIBLIO_RE.search(text[:80]):
-        return str(text.strip())
+        return str(normalize_cjk_spacing(text))
 
     # Find the last metadata marker within the leading window, then cut after it.
     window = text[:220]
@@ -255,9 +302,13 @@ def _strip_noise(summary: str, title: str = "") -> str:
         text = text[cut:]
 
     # Anything still leading: bylines, section labels, stray separators.
-    text = _strip_credits(text.lstrip(" .·-—|｜:：，、"))
+    # 。；！？ are included because feeds sometimes cut the previous sentence,
+    # leaving the summary starting at a full stop ("。相关研究表明…").
+    text = _strip_credits(text.lstrip(" .·-—|｜:：，、。；！？"))
     text = str(_SECTION_LABEL_RE.sub("", text)).strip()
-    return text.strip()
+    # Last pass: collapse Chinese typography dirt left by markup removal
+    # ("华为 鸿蒙", "万台 ，"). See src/textclean.py.
+    return normalize_cjk_spacing(text)
 
 
 def _strip_credits(text: str) -> str:
