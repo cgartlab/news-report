@@ -10,7 +10,7 @@ updates:
       - dependencies
       - github-actions
 
-  # Python packages (if requirements.txt or pyproject.toml has dependencies)
+  # Python packages（pyproject.toml 的 dev / telegram extra）
   - package-ecosystem: pip
     directory: "/"
     schedule:
@@ -19,11 +19,7 @@ updates:
       - dependencies
       - python
 
-  # npm packages (for miniflux-mcp etc.)
-  - package-ecosystem: npm
-    directory: "/"
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-      - npm
+  # 注意：本仓库没有 package.json / package-lock.json（Node 只在运行时用
+  # `npx miniflux-mcp`，不在此仓库安装），因此**不要**配置 npm ecosystem——
+  # 配了会每周跑一次注定失败的 job：dependabot 找不到 /package.json 直接报
+  # "Dependabot encountered an error performing the update"，纯噪音。

@@ -38,9 +38,14 @@ listening_pids() {
       done
     done
   elif command -v netstat >/dev/null 2>&1; then
-    # Windows (Git Bash) and other netstat-only environments.
+    # Windows (Git Bash) and other netstat-only environments. Only LISTENING
+    # rows count: TIME_WAIT rows left behind by a just-closed connection carry
+    # pid 0 and used to be collected too, which made `--stop` pass "0,<pid>"
+    # to taskkill — the whole call failed and the script still reported success.
     pids=$(netstat -ano 2>/dev/null \
-      | awk -v p=":$port" '$1 ~ /^(TCP|tcp)/ && $2 ~ p"$" && $NF ~ /^[0-9]+$/ {print $NF}' \
+      | awk -v p=":$port" \
+          '($1 ~ /^(TCP|tcp)/) && ($2 ~ p"$") && ($4 ~ /^LISTEN/) \
+           && ($NF ~ /^[0-9]+$/) && ($NF + 0 > 0) {print $NF}' \
       | sort -u || true)
   fi
   # Collapse stray whitespace so callers can test the result with [[ -n ]].
@@ -54,11 +59,25 @@ if [[ "${1:-}" == "--stop" ]]; then
     # On Windows/Git Bash, netstat reports Windows PIDs while bash's kill()
     # expects MSYS PIDs; taskkill is the only reliable way to stop those.
     if command -v taskkill >/dev/null 2>&1 && [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]]; then
+      # MSYS_NO_PATHCONV stops MSYS from rewriting "/F" into a path: with the
+      # old "//F //PID" form this Git Bash answered "Invalid argument/option
+      # - '//F'" and the kill silently did nothing.
       # shellcheck disable=SC2086  # intentional word-splitting of the PID list
-      taskkill //F //PID $(echo $PID | tr ' ' ',' ) >/dev/null 2>&1 || true
+      MSYS_NO_PATHCONV=1 taskkill /F /PID "$(echo $PID | tr ' ' ',')" >/dev/null 2>&1 || true
     else
       # shellcheck disable=SC2086  # intentional word-splitting of the PID list
       kill $PID 2>/dev/null || true
+    fi
+    # Never claim success without checking: a kill can be refused (wrong pid
+    # space, permissions), and the port would silently stay open for the next
+    # run to trip over.
+    for _ in 1 2 3 4 5; do
+      [[ -z "$(listening_pids "$PORT")" ]] && break
+      sleep 1
+    done
+    if [[ -n "$(listening_pids "$PORT")" ]]; then
+      echo "error: port $PORT is still listening after stop (pid $PID)" >&2
+      exit 1
     fi
     echo "stopped CDP instance on port $PORT (pid $PID)"
   else
@@ -102,9 +121,10 @@ mkdir -p "$USER_DATA_DIR"
 disown 2>/dev/null || true
 
 # Poll for readiness instead of a fixed sleep: a fixed 3s guess both wastes
-# time on fast machines and fails on slow ones.
+# time on fast machines and fails on slow ones. C-style loop rather than `seq`:
+# macOS does not ship seq, and this script must run there.
 READY_TIMEOUT="${READY_TIMEOUT:-15}"
-for _ in $(seq 1 "$READY_TIMEOUT"); do
+for ((_ = 0; _ < READY_TIMEOUT; _++)); do
   if curl -fsS "http://127.0.0.1:$PORT/json/version" >/dev/null 2>&1; then
     echo "OK: CDP = http://127.0.0.1:$PORT"
     exit 0
