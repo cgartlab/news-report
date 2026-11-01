@@ -750,6 +750,11 @@ Python 实现，**仅用标准库**（`src/x_cdp.py` 内含手写最小 WebSocke
 | 无 x.com 页面 | 浏览器没打开 x.com | 启动器默认打开 `https://x.com`；手动导航到 `https://x.com/home` |
 | 采集为空且未报错 | 该 profile 未登录 x.com | 在 CDP 浏览器窗口中登录一次（登录态保存在 profile 目录） |
 | 页面 JS 异常 | x.com DOM 改版 | 检查 `article[data-testid="tweet"]` 选择器是否仍匹配，必要时更新 `src/collect_x_browser.py` 的提取 JS |
+| `--stop` 报 `port 9222 is still listening after stop` | 停止命令被拒。Windows 上旧实现用 `taskkill //F //PID`，Git Bash（MSYS）不认 `//F`，报 `Invalid argument/option - '//F'`，`|| true` 又吞掉了失败 | 已修复（v0.9.1）：改用 `MSYS_NO_PATHCONV=1 taskkill /F /PID`，并在停止后轮询端口，未释放则报错退出而不是假报成功 |
+| `--stop` 打印 `stopped` 但端口仍占用 | `netstat` 解析把 TIME_WAIT 行的 `pid 0` 也算进 PID 列表，`taskkill` 收到 `0,<pid>` 整体失败 | 已修复（v0.9.1）：只取 `LISTENING` 行且 PID > 0 |
+| macOS 上启动后一直等到超时 | 就绪轮询曾用 `seq`，macOS 不内置该命令（`set -e` 下循环直接不执行） | 已修复（v0.9.1）：改用 bash 算数 for 循环 |
+
+> **验证状态**：上述修复已在 Git Bash + 假浏览器（stub CDP 服务）下逐项跑过——启动参数透传、幂等 no-op、`--stop` 真停、无浏览器候选报错、CDP 不应答超时报错、`shellcheck` 无告警。**真实 Linux / macOS 浏览器环境仍待实测**（issue #46）。
 
 > **隐私提示**：本模块驱动的是你的真实浏览器会话；`edge-cdp.*` 启动器会新建独立 profile（默认 `%LOCALAPPDATA%\edge-cdp-profile` / `~/.local/share/edge-cdp-profile`），与日常浏览器 profile 隔离，x.com 登录态互不影响。
 

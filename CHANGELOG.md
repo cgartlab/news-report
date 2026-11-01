@@ -33,6 +33,14 @@
 - **P1 段末多一个空行**：每条后已补一个空行，区段结束又追加一个，输出里出现连续两个空行。
 - **`src/evaluator.py` 未通过 `ruff format`**：CI 的 `ruff format --check src/` 会失败。仅格式调整（切片空格、长行换行、print 换行），无行为变化。
 - **SKILL.md 声称 `src/report.py` 消费 TOP SIGNAL 长版模板**：实际脚本输出的是 `📰 NEWS REPORT` 简版（四优先级区 + 来源统计），并无 TOP SIGNAL / 影响分析 / 职业风险矩阵。已按实际行为改写该说明，明确三条路径各产出什么。
+- **`bin/edge-cdp.sh --stop` 在 Git Bash 上从未真正生效**：旧实现调用 `taskkill //F //PID`，MSYS 不认 `//F`（报 `Invalid argument/option - '//F'`），`|| true` 又把失败吞掉，于是脚本稳定打印 `stopped ...` 而端口一直占着。现改用 `MSYS_NO_PATHCONV=1 taskkill /F /PID`，并在停止后轮询端口，未释放就报错退出（不再假报成功）。
+- **`--stop` 的 PID 列表混入 `0`**：`netstat -ano` 里 TIME_WAIT 行的 PID 是 0，旧过滤条件把它也算进来，`taskkill` 收到 `0,<pid>` 整体失败。现只取 `LISTENING` 行且 PID > 0。
+- **macOS 上 `edge-cdp.sh` 就绪轮询静默失效**：轮询用 `seq`，macOS 未内置；`set -e` 下循环体不执行，只能等到超时。改用 bash 算数 for 循环。
+- **dependabot 每周跑一次注定失败的 job**：`.github/dependabot.yml` 配了 `npm` ecosystem，但仓库没有 `package.json`，日志稳定报 `Dependabot encountered an error performing the update`。已移除该 ecosystem 并注明原因。
+
+### 工程
+
+- 新增 `.gitattributes`：`* text=auto eol=lf`，`*.ps1/.bat/.cmd` 保留 CRLF。此前 Windows 检出把 `.sh` 变 CRLF（shellcheck 报 SC1017、WSL 里 bad interpreter），`ruff format --check` 还会把 LF 文件误判为「未格式化」。
 
 ### 文档
 

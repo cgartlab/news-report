@@ -1,0 +1,14 @@
+# 换行与文本规范化
+#
+# 仓库内存 LF。Windows 上默认的 core.autocrlf=true 会让工作区变成 CRLF，由此
+# 产生过两类假问题：
+#   1. `.sh` 脚本带 CR 后 `bash -n` / shellcheck 报 SC1017，在 WSL 里直接 bad interpreter
+#   2. `ruff format --check` 把 6 个 LF 文件判成「未格式化」，误以为 CI 门禁会红
+# 显式写死 eol=lf 后，各平台检出一致，上述假阳性不再出现。
+
+* text=auto eol=lf
+
+# Windows 专有脚本保留 CRLF（PowerShell 5.1 对 LF 的兼容性不如 7.x 稳）
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
